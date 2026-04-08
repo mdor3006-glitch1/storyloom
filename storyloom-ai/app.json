@@ -1,0 +1,73 @@
+{
+  "expo": {
+    "name": "StoryLoom AI",
+    "slug": "storyloom-ai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./src/assets/images/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./src/assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FAFAFA"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.storyloom.ai",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "StoryLoom AI needs access to your photo library to upload character photos.",
+        "NSCameraUsageDescription": "StoryLoom AI needs camera access to take character photos.",
+        "NSFaceIDUsageDescription": "StoryLoom AI uses Face ID for secure sign-in."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/images/adaptive-icon.png",
+        "backgroundColor": "#FAFAFA"
+      },
+      "package": "com.storyloom.ai",
+      "versionCode": 1,
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "CAMERA"
+      ]
+    },
+    "web": {
+      "favicon": "./src/assets/images/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "StoryLoom AI needs access to your photos to upload character images.",
+          "cameraPermission": "StoryLoom AI needs camera access to take character photos."
+        }
+      ],
+      "expo-apple-authentication",
+      "expo-web-browser"
+    ],
+    "scheme": "storyloom",
+    "privacy": "unlisted",
+    "primaryColor": "#048A81",
+    "locales": {
+      "en": "./src/assets/store/en-metadata.json",
+      "he": "./src/assets/store/he-metadata.json"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "your-eas-project-id"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/your-eas-project-id"
+    }
+  }
+}

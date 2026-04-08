@@ -1,0 +1,76 @@
+{
+  "app": {
+    "name": "StoryLoom AI",
+    "tagline": "הסיפור שלך. הפנים שלך. אפשרויות אינסופיות."
+  },
+  "auth": {
+    "sign_in_google": "המשך עם Google",
+    "sign_in_apple": "המשך עם Apple",
+    "sign_in_email": "התחבר עם אימייל",
+    "sign_up": "צור חשבון",
+    "subtitle": "התחבר כדי להתחיל את הסיפור שלך",
+    "email_placeholder": "כתובת אימייל",
+    "password_placeholder": "סיסמה",
+    "age_confirm": "אני מאשר שאני בן 18 ומעלה"
+  },
+  "home": {
+    "new_story": "סיפור חדש",
+    "active_stories": "הסיפורים שלך",
+    "no_stories": "אין סיפורים פעילים. התחל אחד!",
+    "credits": "קרדיטים"
+  },
+  "story_setup": {
+    "step_genre": "בחר ז'אנר",
+    "step_setting": "איפה זה קורה?",
+    "step_tone": "קבע את הטון",
+    "step_length": "כמה ארוך?",
+    "step_art": "סגנון אמנות",
+    "surprise_me": "הפתע אותי",
+    "next": "הבא",
+    "back": "חזור"
+  },
+  "characters": {
+    "upload_main": "העלה דמות ראשית",
+    "upload_secondary": "העלה דמות משנית",
+    "name_placeholder": "שם הדמות",
+    "traits_placeholder": "הוסף תכונות (אופציונלי)",
+    "start_story": "התחל סיפור"
+  },
+  "scene": {
+    "undo": "בטל",
+    "report": "דווח",
+    "scene_of": "סצנה {{current}} מתוך {{total}}",
+    "your_input": "הקלד 1-3 מילים...",
+    "generating": "מייצר את הסצנה שלך..."
+  },
+  "ending": {
+    "title": "סוף",
+    "save_favourite": "שמור למועדפים",
+    "new_story": "התחל סיפור חדש",
+    "home": "חזור לדף הבית"
+  },
+  "credits": {
+    "balance": "יתרת קרדיטים",
+    "buy": "קנה קרדיטים",
+    "packs": {
+      "starter": "סטארטר — 100 קרדיטים",
+      "basic": "בסיסי — 300 קרדיטים",
+      "popular": "פופולרי — 600 קרדיטים",
+      "value": "ערך — 1,500 קרדיטים",
+      "mega": "מגה — 3,500 קרדיטים"
+    }
+  },
+  "profile": {
+    "language": "שפה",
+    "logout": "התנתק",
+    "delete_account": "מחק חשבון",
+    "delete_confirm": "האם אתה בטוח? פעולה זו תמחק לצמיתות את כל הנתונים שלך."
+  },
+  "errors": {
+    "generic": "משהו השתבש. אנא נסה שוב.",
+    "no_credits": "אין מספיק קרדיטים. אנא רכוש עוד.",
+    "upload_face": "אנא העלה תמונה עם פנים ברורות.",
+    "upload_size": "התמונה חייבת להיות קטנה מ-5MB.",
+    "upload_format": "נתמכים רק קבצי JPG ו-PNG."
+  }
+}

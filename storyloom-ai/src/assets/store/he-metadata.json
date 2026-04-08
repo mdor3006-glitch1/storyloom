@@ -1,0 +1,6 @@
+{
+  "CFBundleDisplayName": "StoryLoom AI",
+  "NSPhotoLibraryUsageDescription": "StoryLoom AI זקוקה לגישה לספריית התמונות שלך כדי להעלות תמונות דמויות לסיפור שלך.",
+  "NSCameraUsageDescription": "StoryLoom AI זקוקה לגישה למצלמה כדי לצלם תמונות דמויות לסיפור שלך.",
+  "NSFaceIDUsageDescription": "StoryLoom AI משתמשת ב-Face ID לכניסה מאובטחת ונוחה."
+}

@@ -1,0 +1,76 @@
+{
+  "app": {
+    "name": "StoryLoom AI",
+    "tagline": "Your story. Your face. Infinite possibilities."
+  },
+  "auth": {
+    "sign_in_google": "Continue with Google",
+    "sign_in_apple": "Continue with Apple",
+    "sign_in_email": "Sign in with Email",
+    "sign_up": "Create Account",
+    "subtitle": "Sign in to begin your story",
+    "email_placeholder": "Email address",
+    "password_placeholder": "Password",
+    "age_confirm": "I confirm I am 18 or older"
+  },
+  "home": {
+    "new_story": "New Story",
+    "active_stories": "Your Stories",
+    "no_stories": "No active stories. Start one!",
+    "credits": "Credits"
+  },
+  "story_setup": {
+    "step_genre": "Choose a genre",
+    "step_setting": "Where does it happen?",
+    "step_tone": "Set the tone",
+    "step_length": "How long?",
+    "step_art": "Art style",
+    "surprise_me": "Surprise Me",
+    "next": "Next",
+    "back": "Back"
+  },
+  "characters": {
+    "upload_main": "Upload Main Character",
+    "upload_secondary": "Upload Secondary Character",
+    "name_placeholder": "Character name",
+    "traits_placeholder": "Add traits (optional)",
+    "start_story": "Start Story"
+  },
+  "scene": {
+    "undo": "Undo",
+    "report": "Report",
+    "scene_of": "Scene {{current}} of {{total}}",
+    "your_input": "Type 1-3 words...",
+    "generating": "Generating your scene..."
+  },
+  "ending": {
+    "title": "The End",
+    "save_favourite": "Save to Favourites",
+    "new_story": "Start New Story",
+    "home": "Back to Home"
+  },
+  "credits": {
+    "balance": "Credit Balance",
+    "buy": "Buy Credits",
+    "packs": {
+      "starter": "Starter — 100 credits",
+      "basic": "Basic — 300 credits",
+      "popular": "Popular — 600 credits",
+      "value": "Value — 1,500 credits",
+      "mega": "Mega — 3,500 credits"
+    }
+  },
+  "profile": {
+    "language": "Language",
+    "logout": "Sign Out",
+    "delete_account": "Delete Account",
+    "delete_confirm": "Are you sure? This will permanently delete all your data."
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "no_credits": "Not enough credits. Please purchase more.",
+    "upload_face": "Please upload a photo with a clearly visible face.",
+    "upload_size": "Photo must be under 5MB.",
+    "upload_format": "Only JPG and PNG photos are supported."
+  }
+}
