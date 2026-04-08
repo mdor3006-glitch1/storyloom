@@ -1,5 +1,7 @@
 'use strict';
 
+const logger = require('../config/logger');
+
 const TWIST_TYPES = ['Betrayal', 'Secret Revealed', 'Unexpected Arrival', 'Time Jump', 'Power Shift', 'Death'];
 
 // Minimum scenes between twists
@@ -25,23 +27,43 @@ const BASE_TWIST_PROB = 0.08;
  */
 function getTwistInstruction(story, recentScenes) {
   const sceneNum = (story.current_scene_number ?? 0) + 1;
+  const context = { storyId: story.id, sceneNum, genre: story.genre, tension: story.story_tension_score };
 
   // Never in scenes 1-3
-  if (sceneNum <= 3) return null;
+  if (sceneNum <= 3) {
+    logger.debug('[TwistService] No twist — scene is in setup phase (1-3)', context);
+    return null;
+  }
 
   // Check cooldown — no twist if one occurred within the last TWIST_COOLDOWN scenes
   const recentTwist = recentScenes.some((s) => s.twist_occurred);
-  if (recentTwist) return null;
+  if (recentTwist) {
+    logger.debug('[TwistService] No twist — cooldown active (recent twist detected)', context);
+    return null;
+  }
 
   // Probability based on tension (0-100 → 0-1 scale) + base probability
   const tension = story.story_tension_score ?? 0;
   const prob = BASE_TWIST_PROB + (tension / 100) * 0.25; // max ~33% at full tension
+  const roll = Math.random();
 
-  if (Math.random() > prob) return null;
+  if (roll > prob) {
+    logger.debug('[TwistService] No twist this scene', { ...context, prob: prob.toFixed(3), roll: roll.toFixed(3) });
+    return null;
+  }
 
   // Pick twist type weighted by genre
   const type = selectTwistType(story.genre, tension);
-  return `Introduce a ${type} twist in this scene. Make it narratively coherent and surprising but not random.`;
+  const instruction = `Introduce a ${type} twist in this scene. Make it narratively coherent and surprising but not random.`;
+
+  logger.info('[TwistService] TWIST triggered!', {
+    ...context,
+    twistType: type,
+    prob: prob.toFixed(3),
+    roll: roll.toFixed(3),
+  });
+
+  return instruction;
 }
 
 function selectTwistType(genre, tension) {
@@ -58,7 +80,10 @@ function selectTwistType(genre, tension) {
   const pool = weights[genre] ?? TWIST_TYPES;
   // Higher tension → prefer more dramatic twists (first in each list)
   const cutoff = tension > 60 ? Math.ceil(pool.length / 2) : pool.length;
-  return pool[Math.floor(Math.random() * cutoff)];
+  const selected = pool[Math.floor(Math.random() * cutoff)];
+
+  logger.debug('[TwistService] Twist type selected', { genre, tension, pool: pool.slice(0, cutoff), selected });
+  return selected;
 }
 
 module.exports = { getTwistInstruction };

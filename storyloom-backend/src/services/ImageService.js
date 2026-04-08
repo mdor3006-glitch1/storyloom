@@ -4,6 +4,7 @@ const { fal } = require('@fal-ai/client');
 const { v4: uuidv4 } = require('uuid');
 const { supabaseAdmin } = require('../config/supabase');
 const env = require('../config/env');
+const logger = require('../config/logger');
 
 fal.config({ credentials: env.fal.apiKey });
 
@@ -17,10 +18,12 @@ const FLUX_MODEL     = 'fal-ai/flux-pro/kontext';
  * Used to pass reference photos to fal.ai.
  */
 async function urlToDataUrl(url) {
+  logger.debug('[ImageService] Fetching reference image as data URL', { url });
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch reference image: ${res.status}`);
   const buf = Buffer.from(await res.arrayBuffer());
   const mime = res.headers.get('content-type') ?? 'image/jpeg';
+  logger.debug('[ImageService] Reference image fetched', { url, mime, bytes: buf.length });
   return `data:${mime};base64,${buf.toString('base64')}`;
 }
 
@@ -29,18 +32,25 @@ async function urlToDataUrl(url) {
  * Returns the public CDN URL.
  */
 async function storeImage(imageUrl, storyId, sceneNumber) {
+  logger.debug('[ImageService] Downloading generated image for storage', { storyId, sceneNumber, imageUrl });
   const res = await fetch(imageUrl);
   if (!res.ok) throw new Error(`Failed to download generated image: ${res.status}`);
   const buf = Buffer.from(await res.arrayBuffer());
   const path = `${storyId}/scene-${sceneNumber}-${uuidv4()}.jpg`;
 
+  logger.debug('[ImageService] Uploading to Supabase Storage', { storyId, sceneNumber, path, bytes: buf.length });
+
   const { error } = await supabaseAdmin.storage
     .from(STORAGE_BUCKET)
     .upload(path, buf, { contentType: 'image/jpeg', upsert: false });
 
-  if (error) throw new Error(`Storage upload failed: ${error.message}`);
+  if (error) {
+    logger.error('[ImageService] Supabase Storage upload failed', { storyId, sceneNumber, path, error: error.message });
+    throw new Error(`Storage upload failed: ${error.message}`);
+  }
 
   const { data } = supabaseAdmin.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+  logger.info('[ImageService] Image stored in Supabase Storage', { storyId, sceneNumber, publicUrl: data.publicUrl });
   return data.publicUrl;
 }
 
@@ -64,8 +74,10 @@ async function storeImage(imageUrl, storyId, sceneNumber) {
  * @returns {Promise<string>} public CDN URL of the stored image
  */
 async function generateSceneImage({ imagePrompt, storyId, sceneNumber, characters, previousImageUrl }) {
+  const context = { storyId, sceneNumber };
+
   if (!env.fal.apiKey) {
-    console.warn('[ImageService] FAL_API_KEY not set — returning placeholder');
+    logger.warn('[ImageService] FAL_API_KEY not set — returning placeholder image', context);
     return 'https://placehold.co/1280x720/2E4057/FAFAFA?text=Scene+Image';
   }
 
@@ -76,7 +88,16 @@ async function generateSceneImage({ imagePrompt, storyId, sceneNumber, character
 
   if (previousImageUrl) referenceUrls.push(previousImageUrl);
 
+  logger.info('[ImageService] Starting FLUX.1 Kontext image generation', {
+    ...context,
+    model: FLUX_MODEL,
+    referenceImageCount: referenceUrls.length,
+    hasPreviousScene: !!previousImageUrl,
+    promptLength: imagePrompt.length,
+  });
+
   // Convert reference URLs to base64 data URLs for fal.ai
+  logger.debug('[ImageService] Converting reference images to base64 data URLs', { ...context, count: referenceUrls.length });
   const referenceDataUrls = await Promise.all(referenceUrls.map(urlToDataUrl));
 
   // Build fal.ai input
@@ -92,13 +113,30 @@ async function generateSceneImage({ imagePrompt, storyId, sceneNumber, character
     ...(referenceDataUrls.length > 1 ? { reference_images: referenceDataUrls.slice(1).map((url) => ({ url })) } : {}),
   };
 
+  logger.debug('[ImageService] Calling fal.ai FLUX.1 Kontext', {
+    ...context,
+    inferenceSteps: falInput.num_inference_steps,
+    guidanceScale: falInput.guidance_scale,
+    imageSize: `${falInput.image_size.width}x${falInput.image_size.height}`,
+  });
+
+  const falStart = Date.now();
   const result = await fal.run(FLUX_MODEL, { input: falInput });
+  const falMs = Date.now() - falStart;
 
   const generatedUrl = result?.images?.[0]?.url;
-  if (!generatedUrl) throw new Error('fal.ai returned no image URL');
+  if (!generatedUrl) {
+    logger.error('[ImageService] fal.ai returned no image URL', { ...context, result });
+    throw new Error('fal.ai returned no image URL');
+  }
+
+  logger.info('[ImageService] fal.ai image generation complete', { ...context, durationMs: falMs, generatedUrl });
 
   // Store in Supabase Storage and return CDN URL
-  return storeImage(generatedUrl, storyId, sceneNumber);
+  const publicUrl = await storeImage(generatedUrl, storyId, sceneNumber);
+
+  logger.info('[ImageService] Scene image pipeline complete', { ...context, publicUrl });
+  return publicUrl;
 }
 
 module.exports = { generateSceneImage };

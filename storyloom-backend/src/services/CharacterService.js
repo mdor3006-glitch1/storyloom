@@ -5,6 +5,7 @@ const { fal } = require('@fal-ai/client');
 const Anthropic = require('@anthropic-ai/sdk');
 const { supabaseAdmin } = require('../config/supabase');
 const env = require('../config/env');
+const logger = require('../config/logger');
 
 // ── SDK config (once at module load) ─────────────────────────
 fal.config({ credentials: env.fal.apiKey });
@@ -23,20 +24,23 @@ const INITIAL_EMOTIONS = { love: 50, trust: 50, anger: 0, fear: 0, jealousy: 0 }
  */
 async function checkNsfw(base64Data, mimeType) {
   if (!env.fal.apiKey) {
-    // fal.ai not configured — skip in development
-    console.warn('[CharacterService] FAL_API_KEY not set — skipping NSFW check');
+    logger.warn('[CharacterService] FAL_API_KEY not set — skipping NSFW check');
     return true;
   }
+
+  logger.debug('[CharacterService] Running NSFW classification via fal.ai');
   const dataUrl = `data:${mimeType};base64,${base64Data}`;
+
   try {
     const result = await fal.run('fal-ai/imageutils/nsfw', {
       input: { image_url: dataUrl },
     });
     const nsfwProb = result?.nsfw_probability ?? 0;
-    return nsfwProb < NSFW_THRESHOLD;
+    const safe = nsfwProb < NSFW_THRESHOLD;
+    logger.debug('[CharacterService] NSFW classification result', { nsfwProbability: nsfwProb, threshold: NSFW_THRESHOLD, safe });
+    return safe;
   } catch (err) {
-    // If the moderation service is unavailable, fail safe by blocking the upload
-    console.error('[CharacterService] NSFW check failed:', err.message);
+    logger.error('[CharacterService] NSFW check failed', { error: err.message });
     throw new Error('Content moderation service unavailable. Please try again.');
   }
 }
@@ -47,9 +51,12 @@ async function checkNsfw(base64Data, mimeType) {
  */
 async function detectFace(base64Data, mimeType) {
   if (!env.anthropic.apiKey) {
-    console.warn('[CharacterService] ANTHROPIC_API_KEY not set — skipping face detection');
+    logger.warn('[CharacterService] ANTHROPIC_API_KEY not set — skipping face detection');
     return true;
   }
+
+  logger.debug('[CharacterService] Running face detection via Claude Haiku vision');
+
   try {
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -71,9 +78,11 @@ async function detectFace(base64Data, mimeType) {
       ],
     });
     const answer = response.content[0]?.text?.trim().toUpperCase() ?? '';
-    return answer.startsWith('YES');
+    const hasFace = answer.startsWith('YES');
+    logger.debug('[CharacterService] Face detection result', { answer, hasFace });
+    return hasFace;
   } catch (err) {
-    console.error('[CharacterService] Face detection failed:', err.message);
+    logger.error('[CharacterService] Face detection failed', { error: err.message });
     throw new Error('Face detection service unavailable. Please try again.');
   }
 }
@@ -88,6 +97,8 @@ async function uploadToStorage(buffer, mimeType, userId, storyId, role) {
   const ext = mimeType === 'image/png' ? 'png' : 'jpg';
   const path = `${userId}/${storyId}/${role}-${uuidv4()}.${ext}`;
 
+  logger.debug('[CharacterService] Uploading photo to Supabase Storage', { path, bytes: buffer.length, mimeType });
+
   const { error } = await supabaseAdmin.storage
     .from(STORAGE_BUCKET)
     .upload(path, buffer, {
@@ -96,7 +107,7 @@ async function uploadToStorage(buffer, mimeType, userId, storyId, role) {
     });
 
   if (error) {
-    console.error('[CharacterService] Storage upload failed:', error.message);
+    logger.error('[CharacterService] Storage upload failed', { path, error: error.message });
     throw new Error('Failed to store photo. Please try again.');
   }
 
@@ -104,6 +115,7 @@ async function uploadToStorage(buffer, mimeType, userId, storyId, role) {
     .from(STORAGE_BUCKET)
     .getPublicUrl(path);
 
+  logger.info('[CharacterService] Photo uploaded to storage', { path, publicUrl: publicUrlData.publicUrl });
   return publicUrlData.publicUrl;
 }
 
@@ -120,15 +132,19 @@ async function uploadToStorage(buffer, mimeType, userId, storyId, role) {
  * @param {'main'|'secondary'}  role
  */
 async function validateAndUploadPhoto(buffer, mimeType, userId, storyId, role) {
+  logger.info('[CharacterService] Validating and uploading character photo', { userId, storyId, role, mimeType, bytes: buffer.length });
+
   const base64Data = buffer.toString('base64');
 
   // Run NSFW check and face detection concurrently
+  logger.debug('[CharacterService] Running NSFW check and face detection concurrently', { role });
   const [isSafe, hasFace] = await Promise.all([
     checkNsfw(base64Data, mimeType),
     detectFace(base64Data, mimeType),
   ]);
 
   if (!isSafe) {
+    logger.warn('[CharacterService] Photo rejected: NSFW content detected', { userId, storyId, role });
     const err = new Error('Photo contains inappropriate content and cannot be used.');
     err.statusCode = 422;
     err.code = 'NSFW_REJECTED';
@@ -136,12 +152,14 @@ async function validateAndUploadPhoto(buffer, mimeType, userId, storyId, role) {
   }
 
   if (!hasFace) {
+    logger.warn('[CharacterService] Photo rejected: no face detected', { userId, storyId, role });
     const err = new Error('No clearly visible face detected. Please upload a photo with a clear face.');
     err.statusCode = 422;
     err.code = 'NO_FACE_DETECTED';
     throw err;
   }
 
+  logger.debug('[CharacterService] Photo passed validation — proceeding to upload', { role });
   return uploadToStorage(buffer, mimeType, userId, storyId, role);
 }
 
@@ -156,6 +174,12 @@ async function validateAndUploadPhoto(buffer, mimeType, userId, storyId, role) {
  * @returns {Promise<Array>} Inserted character rows
  */
 async function createCharacters(userId, storyId, characterMeta, photos) {
+  logger.info('[CharacterService] Creating characters for story', {
+    userId,
+    storyId,
+    characters: characterMeta.map((m) => ({ role: m.role, name: m.name })),
+  });
+
   // Verify the story belongs to this user
   const { data: story, error: storyErr } = await supabaseAdmin
     .from('stories')
@@ -165,28 +189,20 @@ async function createCharacters(userId, storyId, characterMeta, photos) {
     .single();
 
   if (storyErr || !story) {
+    logger.warn('[CharacterService] Story ownership check failed', { userId, storyId });
     const err = new Error('Story not found or access denied.');
     err.statusCode = 404;
     throw err;
   }
 
   // Upload both photos concurrently (moderation runs inside)
+  logger.info('[CharacterService] Uploading both character photos concurrently', { storyId });
   const [mainUrl, secondaryUrl] = await Promise.all([
-    validateAndUploadPhoto(
-      photos.main.buffer,
-      photos.main.mimeType,
-      userId,
-      storyId,
-      'main'
-    ),
-    validateAndUploadPhoto(
-      photos.secondary.buffer,
-      photos.secondary.mimeType,
-      userId,
-      storyId,
-      'secondary'
-    ),
+    validateAndUploadPhoto(photos.main.buffer, photos.main.mimeType, userId, storyId, 'main'),
+    validateAndUploadPhoto(photos.secondary.buffer, photos.secondary.mimeType, userId, storyId, 'secondary'),
   ]);
+
+  logger.info('[CharacterService] Both photos uploaded', { storyId, mainUrl, secondaryUrl });
 
   const urlByRole = { main: mainUrl, secondary: secondaryUrl };
 
@@ -206,15 +222,22 @@ async function createCharacters(userId, storyId, characterMeta, photos) {
     updated_at: new Date().toISOString(),
   }));
 
+  logger.debug('[CharacterService] Inserting character rows into DB', { storyId, count: rows.length });
+
   const { data: inserted, error: insertErr } = await supabaseAdmin
     .from('characters')
     .insert(rows)
     .select();
 
   if (insertErr) {
-    console.error('[CharacterService] DB insert failed:', insertErr.message);
+    logger.error('[CharacterService] DB insert failed', { storyId, error: insertErr.message });
     throw new Error('Failed to save characters. Please try again.');
   }
+
+  logger.info('[CharacterService] Characters inserted into DB', {
+    storyId,
+    characterIds: inserted.map((c) => c.id),
+  });
 
   return inserted;
 }
@@ -228,6 +251,8 @@ async function createCharacters(userId, storyId, characterMeta, photos) {
  * @returns {Promise<Array>} Character rows
  */
 async function getCharactersForStory(userId, storyId) {
+  logger.debug('[CharacterService] Fetching characters for story', { userId, storyId });
+
   // Verify ownership
   const { data: story, error: storyErr } = await supabaseAdmin
     .from('stories')
@@ -237,6 +262,7 @@ async function getCharactersForStory(userId, storyId) {
     .single();
 
   if (storyErr || !story) {
+    logger.warn('[CharacterService] Story ownership check failed', { userId, storyId });
     const err = new Error('Story not found or access denied.');
     err.statusCode = 404;
     throw err;
@@ -250,10 +276,11 @@ async function getCharactersForStory(userId, storyId) {
     .order('role', { ascending: true });
 
   if (error) {
-    console.error('[CharacterService] Fetch failed:', error.message);
+    logger.error('[CharacterService] Failed to fetch characters', { userId, storyId, error: error.message });
     throw new Error('Failed to fetch characters.');
   }
 
+  logger.debug('[CharacterService] Characters fetched', { storyId, count: characters?.length ?? 0 });
   return characters;
 }
 

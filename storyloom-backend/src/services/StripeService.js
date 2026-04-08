@@ -2,6 +2,7 @@
 
 const stripe = require('stripe');
 const env = require('../config/env');
+const logger = require('../config/logger');
 const { addCredits } = require('./CreditService');
 
 // ── Credit pack definitions ─────────────────────────────────
@@ -34,10 +35,13 @@ function getStripe() {
 async function createPaymentIntent(userId, packId) {
   const pack = CREDIT_PACKS[packId];
   if (!pack) {
+    logger.warn('[StripeService] Unknown credit pack requested', { userId, packId });
     const err = new Error(`Unknown credit pack: ${packId}`);
     err.statusCode = 400;
     throw err;
   }
+
+  logger.info('[StripeService] Creating PaymentIntent', { userId, packId, credits: pack.credits, priceCents: pack.price_cents });
 
   const paymentIntent = await getStripe().paymentIntents.create({
     amount: pack.price_cents,
@@ -45,6 +49,8 @@ async function createPaymentIntent(userId, packId) {
     metadata: { user_id: userId, pack_id: packId, credits: String(pack.credits) },
     automatic_payment_methods: { enabled: true },
   });
+
+  logger.info('[StripeService] PaymentIntent created', { userId, packId, paymentIntentId: paymentIntent.id });
 
   return {
     clientSecret: paymentIntent.client_secret,
@@ -74,20 +80,35 @@ async function handleWebhook(rawBody, signature) {
     throw e;
   }
 
+  logger.info('[StripeService] Webhook event received', { eventType: event.type, eventId: event.id });
+
   if (event.type === 'payment_intent.succeeded') {
     const intent = event.data.object;
     const { user_id, pack_id, credits } = intent.metadata;
 
     if (!user_id || !credits) {
-      console.warn('[StripeService] Missing metadata on PaymentIntent:', intent.id);
+      logger.warn('[StripeService] PaymentIntent missing required metadata — skipping credit grant', {
+        paymentIntentId: intent.id,
+        metadata: intent.metadata,
+      });
       return;
     }
 
     const pack = CREDIT_PACKS[pack_id];
     const description = pack ? `${pack_id.charAt(0).toUpperCase() + pack_id.slice(1)} pack — ${credits} credits` : `${credits} credits`;
 
+    logger.info('[StripeService] Payment succeeded — granting credits', {
+      userId: user_id,
+      packId: pack_id,
+      credits,
+      paymentIntentId: intent.id,
+    });
+
     await addCredits(user_id, parseInt(credits, 10), description, intent.id);
-    console.log(`[StripeService] Added ${credits} credits to user ${user_id} via ${intent.id}`);
+
+    logger.info('[StripeService] Credits granted successfully', { userId: user_id, credits, paymentIntentId: intent.id });
+  } else {
+    logger.debug('[StripeService] Unhandled webhook event type — ignoring', { eventType: event.type });
   }
   // Other event types are ignored for now
 }

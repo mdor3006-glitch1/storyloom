@@ -2,6 +2,7 @@
 
 const { v4: uuidv4 } = require('uuid');
 const { supabaseAdmin } = require('../config/supabase');
+const logger = require('../config/logger');
 const { deductCredits, refundCredits, STORY_CREDIT_COSTS } = require('./CreditService');
 const { createCharacters } = require('./CharacterService');
 
@@ -19,14 +20,14 @@ const VALID_LENGTHS    = ['short', 'medium', 'long'];
 const VALID_GENRES     = ['Romance', 'Thriller', 'Fantasy', 'Horror', 'Drama', 'Sci-Fi', 'Surprise Me'];
 const VALID_ART_STYLES = ['Cinematic', 'Realistic', 'Anime', 'Illustrated', 'Comic Book', 'AI Decides'];
 
-// ── Helpers ─────────────────────────���─────────────────────────
+// ── Helpers ───────────────────────────────────────────────────
 
 function totalScenes(length) {
   const v = TOTAL_SCENES_BY_LENGTH[length];
   return typeof v === 'function' ? v() : v;
 }
 
-// ── Public API ─────────────────────────��──────────────────────
+// ── Public API ────────────────────────────────────────────────
 
 /**
  * Create a new story and its two characters in a single atomic flow.
@@ -47,28 +48,38 @@ function totalScenes(length) {
 async function createStory(userId, wizardData, characterMeta, photos) {
   const { genre, setting, tone, length, art_style } = wizardData;
 
-  // ── 1. Validate ──────────��──────────────────────────────────
+  logger.info('[StoryService] Creating new story', { userId, genre, setting, tone, length, art_style });
+
+  // ── 1. Validate ───────────────────────────────────────────
   if (!VALID_LENGTHS.includes(length)) {
+    logger.warn('[StoryService] Invalid story length', { userId, length });
     throw Object.assign(new Error('Invalid story length.'), { statusCode: 400 });
   }
   if (!genre || !setting || !tone || !art_style) {
+    logger.warn('[StoryService] Missing required wizard fields', { userId, genre, setting, tone, art_style });
     throw Object.assign(new Error('genre, setting, tone and art_style are all required.'), { statusCode: 400 });
   }
 
   const cost = STORY_CREDIT_COSTS[length];
+  const scenes = totalScenes(length);
   const storyId = uuidv4();
 
-  // ── 2. Deduct credits ───────────────────────────��────────────
+  logger.info('[StoryService] Story parameters resolved', { userId, storyId, cost, totalScenes: scenes });
+
+  // ── 2. Deduct credits ─────────────────────────────────────
+  logger.info('[StoryService] Deducting credits for story creation', { userId, storyId, amount: cost });
   await deductCredits(
     userId,
     cost,
     `${length.charAt(0).toUpperCase() + length.slice(1)} story started`,
     storyId
   );
+  logger.info('[StoryService] Credits deducted successfully', { userId, storyId, amount: cost });
 
-  // ── 3. Insert story row ──────────────────────────��───────────
+  // ── 3. Insert story row ───────────────────────────────────
   let story;
   try {
+    logger.debug('[StoryService] Inserting story row into DB', { storyId });
     const { data, error } = await supabaseAdmin
       .from('stories')
       .insert({
@@ -78,7 +89,7 @@ async function createStory(userId, wizardData, characterMeta, photos) {
         setting,
         tone,
         art_style,
-        total_scenes: totalScenes(length),
+        total_scenes: scenes,
         current_scene_number: 0,
         status: 'active',
         credits_spent: cost,
@@ -91,27 +102,37 @@ async function createStory(userId, wizardData, characterMeta, photos) {
 
     if (error) throw error;
     story = data;
+    logger.info('[StoryService] Story row inserted', { storyId, userId });
   } catch (err) {
-    // Refund and surface error
+    logger.error('[StoryService] Story insert failed — refunding credits', { storyId, userId, error: err.message });
     await refundCredits(userId, cost, 'Refund: story creation failed', storyId);
-    console.error('[StoryService] Story insert failed:', err.message);
     throw Object.assign(new Error('Failed to create story. Credits have been refunded.'), { statusCode: 500 });
   }
 
-  // ── 4. Upload photos + create characters ─────────────────────
+  // ── 4. Upload photos + create characters ──────────────────
   let characters;
   try {
+    logger.info('[StoryService] Creating characters and uploading photos', { storyId, userId });
     characters = await createCharacters(userId, storyId, characterMeta, photos);
+    logger.info('[StoryService] Characters created successfully', {
+      storyId,
+      characterCount: characters.length,
+      names: characters.map((c) => c.name),
+    });
   } catch (err) {
-    // Refund credits and delete the orphaned story row
+    logger.error('[StoryService] Character creation failed — refunding credits and deleting story', {
+      storyId,
+      userId,
+      error: err.message,
+    });
     await refundCredits(userId, cost, 'Refund: character upload failed', storyId);
     await supabaseAdmin.from('stories').delete().eq('id', storyId);
     // Re-throw known validation errors (NSFW, no face) directly
     if (err.statusCode === 422) throw err;
-    console.error('[StoryService] Character creation failed:', err.message);
     throw Object.assign(new Error('Failed to upload character photos. Credits have been refunded.'), { statusCode: 500 });
   }
 
+  logger.info('[StoryService] Story creation complete', { storyId, userId, genre, length, totalScenes: scenes });
   return { story, characters };
 }
 
@@ -120,6 +141,8 @@ async function createStory(userId, wizardData, characterMeta, photos) {
  * Includes characters for each story.
  */
 async function getUserStories(userId) {
+  logger.debug('[StoryService] Fetching stories for user', { userId });
+
   const { data: stories, error } = await supabaseAdmin
     .from('stories')
     .select('*')
@@ -127,9 +150,15 @@ async function getUserStories(userId) {
     .neq('status', 'abandoned')
     .order('created_at', { ascending: false });
 
-  if (error) throw new Error('Failed to fetch stories.');
+  if (error) {
+    logger.error('[StoryService] Failed to fetch user stories', { userId, error: error.message });
+    throw new Error('Failed to fetch stories.');
+  }
 
-  if (!stories.length) return [];
+  if (!stories.length) {
+    logger.debug('[StoryService] No stories found for user', { userId });
+    return [];
+  }
 
   // Batch-load characters for all stories
   const storyIds = stories.map((s) => s.id);
@@ -145,6 +174,7 @@ async function getUserStories(userId) {
     (charMap[c.story_id] ??= []).push(c);
   }
 
+  logger.debug('[StoryService] Stories fetched', { userId, count: stories.length });
   return stories.map((s) => ({ ...s, characters: charMap[s.id] ?? [] }));
 }
 
@@ -153,6 +183,8 @@ async function getUserStories(userId) {
  * Verifies the requesting user owns it.
  */
 async function getStory(userId, storyId) {
+  logger.debug('[StoryService] Fetching story', { userId, storyId });
+
   const { data: story, error } = await supabaseAdmin
     .from('stories')
     .select('*')
@@ -162,6 +194,7 @@ async function getStory(userId, storyId) {
     .single();
 
   if (error || !story) {
+    logger.warn('[StoryService] Story not found or access denied', { userId, storyId });
     throw Object.assign(new Error('Story not found.'), { statusCode: 404 });
   }
 
@@ -171,6 +204,7 @@ async function getStory(userId, storyId) {
     .eq('story_id', storyId)
     .order('is_ai_generated', { ascending: true });
 
+  logger.debug('[StoryService] Story fetched', { storyId, characterCount: characters?.length ?? 0 });
   return { ...story, characters: characters ?? [] };
 }
 
@@ -179,13 +213,20 @@ async function getStory(userId, storyId) {
  * No credit refund — per product rules.
  */
 async function abandonStory(userId, storyId) {
+  logger.info('[StoryService] Abandoning story', { userId, storyId });
+
   const { error } = await supabaseAdmin
     .from('stories')
     .update({ status: 'abandoned', completed_at: new Date().toISOString() })
     .eq('id', storyId)
     .eq('user_id', userId);
 
-  if (error) throw new Error('Failed to abandon story.');
+  if (error) {
+    logger.error('[StoryService] Failed to abandon story', { userId, storyId, error: error.message });
+    throw new Error('Failed to abandon story.');
+  }
+
+  logger.info('[StoryService] Story abandoned', { userId, storyId });
 }
 
 /**
@@ -194,6 +235,8 @@ async function abandonStory(userId, storyId) {
  * Un-favourited stories get expires_at = now + 10 days.
  */
 async function toggleFavourite(userId, storyId) {
+  logger.debug('[StoryService] Toggling favourite', { userId, storyId });
+
   // Fetch current value
   const { data: story, error: fetchErr } = await supabaseAdmin
     .from('stories')
@@ -203,6 +246,7 @@ async function toggleFavourite(userId, storyId) {
     .single();
 
   if (fetchErr || !story) {
+    logger.warn('[StoryService] Story not found for favourite toggle', { userId, storyId });
     throw Object.assign(new Error('Story not found.'), { statusCode: 404 });
   }
 
@@ -217,7 +261,12 @@ async function toggleFavourite(userId, storyId) {
     .select()
     .single();
 
-  if (updateErr) throw new Error('Failed to update favourite.');
+  if (updateErr) {
+    logger.error('[StoryService] Failed to update favourite', { userId, storyId, error: updateErr.message });
+    throw new Error('Failed to update favourite.');
+  }
+
+  logger.info('[StoryService] Favourite toggled', { userId, storyId, isFavourite: newFavourite });
   return updated;
 }
 

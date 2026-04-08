@@ -2,6 +2,7 @@
 
 const Anthropic = require('@anthropic-ai/sdk');
 const env = require('../config/env');
+const logger = require('../config/logger');
 
 const anthropic = new Anthropic({ apiKey: env.anthropic.apiKey });
 
@@ -34,10 +35,13 @@ Do not explain. Do not add punctuation. Just: SAFE or UNSAFE`;
  */
 async function filterInput(text) {
   if (!text || !text.trim()) return { safe: true };
+
   if (!env.anthropic.apiKey) {
-    console.warn('[SafetyService] ANTHROPIC_API_KEY not set — skipping input filter');
+    logger.warn('[SafetyService] ANTHROPIC_API_KEY not set — skipping input filter');
     return { safe: true };
   }
+
+  logger.debug('[SafetyService] Running input safety filter', { textLength: text.length });
 
   try {
     const response = await anthropic.messages.create({
@@ -48,9 +52,17 @@ async function filterInput(text) {
     });
 
     const verdict = response.content[0]?.text?.trim().toUpperCase();
-    return { safe: verdict === 'SAFE', reason: verdict === 'UNSAFE' ? 'input_blocked' : undefined };
+    const safe = verdict === 'SAFE';
+
+    if (safe) {
+      logger.debug('[SafetyService] Input filter verdict: SAFE');
+    } else {
+      logger.warn('[SafetyService] Input filter verdict: UNSAFE — input will be suppressed', { verdict });
+    }
+
+    return { safe, reason: !safe ? 'input_blocked' : undefined };
   } catch (err) {
-    console.error('[SafetyService] Input filter error:', err.message);
+    logger.error('[SafetyService] Input filter error — failing open', { error: err.message });
     return { safe: true }; // fail open on service error — Story AI won't act on harmful input anyway
   }
 }
@@ -61,10 +73,13 @@ async function filterInput(text) {
  */
 async function filterOutput(text) {
   if (!text || !text.trim()) return { safe: true };
+
   if (!env.anthropic.apiKey) {
-    console.warn('[SafetyService] ANTHROPIC_API_KEY not set — skipping output filter');
+    logger.warn('[SafetyService] ANTHROPIC_API_KEY not set — skipping output filter');
     return { safe: true };
   }
+
+  logger.debug('[SafetyService] Running output safety filter', { textLength: text.length });
 
   try {
     const response = await anthropic.messages.create({
@@ -75,9 +90,17 @@ async function filterOutput(text) {
     });
 
     const verdict = response.content[0]?.text?.trim().toUpperCase();
-    return { safe: verdict === 'SAFE', reason: verdict === 'UNSAFE' ? 'output_blocked' : undefined };
+    const safe = verdict === 'SAFE';
+
+    if (safe) {
+      logger.debug('[SafetyService] Output filter verdict: SAFE');
+    } else {
+      logger.warn('[SafetyService] Output filter verdict: UNSAFE — scene will be regenerated', { verdict });
+    }
+
+    return { safe, reason: !safe ? 'output_blocked' : undefined };
   } catch (err) {
-    console.error('[SafetyService] Output filter error:', err.message);
+    logger.error('[SafetyService] Output filter error — failing open', { error: err.message });
     return { safe: true }; // fail open — better to show the content than block the story
   }
 }

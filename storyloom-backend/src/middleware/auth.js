@@ -1,6 +1,7 @@
 'use strict';
 
 const { supabaseAdmin } = require('../config/supabase');
+const logger = require('../config/logger');
 
 /**
  * Validates the Supabase JWT from the Authorization header.
@@ -10,6 +11,7 @@ const { supabaseAdmin } = require('../config/supabase');
 async function requireAuth(req, res, next) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
+    logger.warn('[auth] Missing authorization header', { method: req.method, path: req.path });
     return res.status(401).json({ error: 'Missing authorization header' });
   }
 
@@ -18,6 +20,7 @@ async function requireAuth(req, res, next) {
   // Validate the JWT via Supabase Auth (handles expiry, signature, revocation)
   const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token);
   if (authError || !authData?.user) {
+    logger.warn('[auth] Invalid or expired token', { method: req.method, path: req.path, error: authError?.message });
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 
@@ -30,11 +33,14 @@ async function requireAuth(req, res, next) {
 
   if (dbError || !userRow) {
     // User authenticated but profile missing — trigger may not have fired yet
+    logger.warn('[auth] User profile not found after valid token', { userId: authData.user.id });
     return res.status(401).json({ error: 'User profile not found' });
   }
 
   req.user = userRow;
   req.userId = userRow.id;
+
+  logger.debug('[auth] Request authenticated', { userId: userRow.id, method: req.method, path: req.path });
 
   // Fire-and-forget: keep last_active_at current
   supabaseAdmin
@@ -52,8 +58,10 @@ async function requireAuth(req, res, next) {
  */
 function requireAdmin(req, res, next) {
   if (!req.user?.is_admin) {
+    logger.warn('[auth] Admin access denied', { userId: req.userId, method: req.method, path: req.path });
     return res.status(403).json({ error: 'Admin access required' });
   }
+  logger.debug('[auth] Admin access granted', { userId: req.userId });
   next();
 }
 

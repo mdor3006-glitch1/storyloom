@@ -6,6 +6,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 
 const env = require('./config/env');
+const logger = require('./config/logger');
 const { apiLimiter } = require('./middleware/rateLimit');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -19,13 +20,18 @@ const adminRoutes = require('./routes/admin');
 
 const app = express();
 
-// ---- Security & logging -----------------------------------
+// ---- Security ------------------------------------------------
 app.use(helmet());
 app.use(cors({
   origin: true,          // tighten to specific origins in production
   credentials: true,
 }));
-app.use(morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'));
+
+// ---- HTTP request logging (pipe morgan into winston) ----------
+const morganFormat = env.nodeEnv === 'production' ? 'combined' : 'dev';
+app.use(morgan(morganFormat, {
+  stream: { write: (msg) => logger.http(msg.trim()) },
+}));
 
 // ---- Body parsing -----------------------------------------
 // Note: /credits/webhook uses express.raw() inside the route — must come BEFORE this
@@ -37,6 +43,7 @@ app.use(apiLimiter);
 
 // ---- Health check -----------------------------------------
 app.get('/health', (_req, res) => {
+  logger.debug('[server] Health check hit');
   res.json({ status: 'ok', env: env.nodeEnv });
 });
 
@@ -50,7 +57,8 @@ app.use('/reports', reportsRoutes);
 app.use('/admin', adminRoutes);
 
 // ---- 404 --------------------------------------------------
-app.use((_req, res) => {
+app.use((req, res) => {
+  logger.warn('[server] 404 Not Found', { method: req.method, path: req.path });
   res.status(404).json({ error: 'Not found' });
 });
 
@@ -59,7 +67,7 @@ app.use(errorHandler);
 
 // ---- Start ------------------------------------------------
 app.listen(env.port, () => {
-  console.log(`[server] StoryLoom API running on port ${env.port} (${env.nodeEnv})`);
+  logger.info(`[server] StoryLoom API running on port ${env.port} (${env.nodeEnv})`);
 });
 
 module.exports = app;
