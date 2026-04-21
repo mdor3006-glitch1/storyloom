@@ -1,636 +1,731 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
-  ActionSheetIOS,
-  Platform,
+  View, Text, TextInput, TouchableOpacity, ScrollView,
+  StyleSheet, Alert,
 } from 'react-native';
-import { Image } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { useTranslation } from 'react-i18next';
 import { StoryStackParamList, WizardData } from '../navigation/MainStack';
-import { validateImageFile, detectFaceInImage } from '../utils/imageHelpers';
+import { STORY_CREDIT_COSTS } from '../utils/creditHelpers';
 import api from '../services/api';
 import { useStoryStore } from '../store/storyStore';
-
-// ── Types ─────────────────────────────────────────────────────
+import { useCreditStore } from '../store/creditStore';
+import { colors } from '../theme/colors';
+import DiamondLoader from '../components/DiamondLoader';
 
 type Nav   = StackNavigationProp<StoryStackParamList, 'CharacterUpload'>;
 type Route = RouteProp<StoryStackParamList, 'CharacterUpload'>;
 
-type FaceState = 'idle' | 'checking' | 'ok' | 'error';
+// ── Character builder option sets ───────────────────────────────────────────
 
-interface CharacterDraft {
-  photoUri:   string | null;
-  faceState:  FaceState;
+const GENDERS = [
+  { value: 'Male',   icon: '♂' },
+  { value: 'Female', icon: '♀' },
+  { value: 'Other',  icon: '⚧' },
+];
+
+const HAIR_COLORS = [
+  { value: 'Black',      hex: '#1a1a1a' },
+  { value: 'Dark Brown', hex: '#3d2b1f' },
+  { value: 'Brown',      hex: '#7B4F2E' },
+  { value: 'Blonde',     hex: '#F5D07A' },
+  { value: 'Red',        hex: '#C0392B' },
+  { value: 'Auburn',     hex: '#9B3622' },
+  { value: 'Gray',       hex: '#9E9E9E' },
+  { value: 'White',      hex: '#EEEEEE' },
+  { value: 'Blue',       hex: '#1565C0' },
+  { value: 'Pink',       hex: '#E91E8C' },
+  { value: 'Purple',     hex: '#7B1FA2' },
+  { value: 'Green',      hex: '#2E7D32' },
+];
+
+const HAIR_STYLES = [
+  { value: 'Short',     icon: '✂️' },
+  { value: 'Long',      icon: '💇' },
+  { value: 'Curly',     icon: '🌀' },
+  { value: 'Straight',  icon: '〰' },
+  { value: 'Wavy',      icon: '〜' },
+  { value: 'Bun',       icon: '🔵' },
+  { value: 'Ponytail',  icon: '🎗' },
+  { value: 'Bald',      icon: '🔘' },
+  { value: 'Buzz Cut',  icon: '▪' },
+  { value: 'Braids',    icon: '🌿' },
+];
+
+const EYE_COLORS = [
+  { value: 'Brown',      hex: '#5D4037' },
+  { value: 'Dark Brown', hex: '#3E2723' },
+  { value: 'Blue',       hex: '#1565C0' },
+  { value: 'Green',      hex: '#2E7D32' },
+  { value: 'Gray',       hex: '#607D8B' },
+  { value: 'Hazel',      hex: '#8D6E63' },
+  { value: 'Amber',      hex: '#E65100' },
+  { value: 'Black',      hex: '#212121' },
+];
+
+const SKIN_TONES = [
+  { value: 'Porcelain',   hex: '#FDDBB4' },
+  { value: 'Fair',        hex: '#F2C88F' },
+  { value: 'Light',       hex: '#D4A574' },
+  { value: 'Medium',      hex: '#B8864E' },
+  { value: 'Tan',         hex: '#9C6B3C' },
+  { value: 'Brown',       hex: '#7A4E2D' },
+  { value: 'Dark Brown',  hex: '#5C3317' },
+  { value: 'Deep',        hex: '#3E1F0D' },
+];
+
+const BODY_TYPES = [
+  { value: 'Slim',       icon: '🤸' },
+  { value: 'Athletic',   icon: '💪' },
+  { value: 'Average',    icon: '🧍' },
+  { value: 'Curvy',      icon: '🌸' },
+  { value: 'Muscular',   icon: '🏋' },
+  { value: 'Heavyset',   icon: '🐻' },
+  { value: 'Petite',     icon: '🌺' },
+  { value: 'Tall',       icon: '📏' },
+];
+
+const AGE_RANGES = [
+  { value: 'Teen',        icon: '🎒', desc: '14–19' },
+  { value: 'Young Adult', icon: '🎓', desc: '20–30' },
+  { value: 'Adult',       icon: '💼', desc: '31–50' },
+  { value: 'Senior',      icon: '🕰', desc: '51+' },
+];
+
+const OUTFIT_STYLES = [
+  { value: 'Casual',          icon: '👕' },
+  { value: 'Formal',          icon: '👔' },
+  { value: 'Athletic',        icon: '🏃' },
+  { value: 'Elegant',         icon: '👗' },
+  { value: 'Streetwear',      icon: '🧢' },
+  { value: 'Gothic',          icon: '🖤' },
+  { value: 'Fantasy Armor',   icon: '⚔️' },
+  { value: 'Military',        icon: '🎖' },
+  { value: 'School Uniform',  icon: '📚' },
+  { value: 'Business Suit',   icon: '🕴' },
+];
+
+const FEATURES = [
+  { value: 'None',           icon: '✨' },
+  { value: 'Facial scar',    icon: '⚔️' },
+  { value: 'Glasses',        icon: '🤓' },
+  { value: 'Beard',          icon: '🧔' },
+  { value: 'Tattoos',        icon: '🎨' },
+  { value: 'Freckles',       icon: '🌟' },
+  { value: 'Nose piercing',  icon: '💎' },
+  { value: 'Eye patch',      icon: '🏴‍☠️' },
+  { value: 'Birthmark',      icon: '🦋' },
+  { value: 'Dimples',        icon: '😊' },
+];
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+interface CharDraft {
   name:       string;
-  traitInput: string;
-  traits:     string[];
+  gender:     string | null;
+  hairColor:  string | null;
+  hairStyle:  string | null;
+  eyeColor:   string | null;
+  skinTone:   string | null;
+  bodyType:   string | null;
+  ageRange:   string | null;
+  outfit:     string | null;
+  feature:    string | null;
 }
 
-const EMPTY_CHAR = (): CharacterDraft => ({
-  photoUri:   null,
-  faceState:  'idle',
-  name:       '',
-  traitInput: '',
-  traits:     [],
+const EMPTY_CHAR = (): CharDraft => ({
+  name: '', gender: null, hairColor: null, hairStyle: null,
+  eyeColor: null, skinTone: null, bodyType: null,
+  ageRange: null, outfit: null, feature: null,
 });
 
-const MAX_TRAITS = 3;
-const MAX_NAME   = 20;
+function buildAppearance(c: CharDraft): string {
+  const parts: string[] = [];
+  if (c.ageRange) parts.push(c.ageRange);
+  if (c.gender)   parts.push(c.gender.toLowerCase());
+  if (c.bodyType) parts.push(`with ${c.bodyType.toLowerCase()} build`);
+  if (c.skinTone) parts.push(`${c.skinTone.toLowerCase()} skin`);
+  if (c.hairStyle && c.hairColor) {
+    parts.push(`${c.hairStyle.toLowerCase()} ${c.hairColor.toLowerCase()} hair`);
+  } else if (c.hairColor) {
+    parts.push(`${c.hairColor.toLowerCase()} hair`);
+  }
+  if (c.eyeColor) parts.push(`${c.eyeColor.toLowerCase()} eyes`);
+  if (c.outfit)   parts.push(`wearing ${c.outfit.toLowerCase()} style clothing`);
+  if (c.feature && c.feature !== 'None') parts.push(`with ${c.feature.toLowerCase()}`);
+  return parts.join(', ');
+}
 
-// ── Screen ────────────────────────────────────────────────────
+function isCharComplete(c: CharDraft): boolean {
+  return (
+    c.name.trim().length > 0 &&
+    !!c.gender && !!c.hairColor && !!c.hairStyle &&
+    !!c.eyeColor && !!c.skinTone && !!c.bodyType &&
+    !!c.ageRange && !!c.outfit && !!c.feature
+  );
+}
+
+// ── Component ────────────────────────────────────────────────────────────────
 
 export default function CharacterUploadScreen() {
-  const { t }       = useTranslation();
   const navigation  = useNavigation<Nav>();
   const route       = useRoute<Route>();
   const wizard: WizardData = route.params;
-
   const setActiveStory = useStoryStore((s) => s.setActiveStory);
+  const deductCredits  = useCreditStore((s) => s.deductCredits);
 
-  const [chars, setChars]       = useState<[CharacterDraft, CharacterDraft]>([EMPTY_CHAR(), EMPTY_CHAR()]);
+  const [activeTab, setActiveTab]   = useState<0 | 1>(0);
+  const [chars, setChars]           = useState<[CharDraft, CharDraft]>([EMPTY_CHAR(), EMPTY_CHAR()]);
   const [submitting, setSubmitting] = useState(false);
 
-  // ── Helpers ──────────────────────────────────────────────────
-
-  function patchChar(idx: 0 | 1, patch: Partial<CharacterDraft>) {
+  function patch(idx: 0 | 1, p: Partial<CharDraft>) {
     setChars((prev) => {
-      const next: [CharacterDraft, CharacterDraft] = [{ ...prev[0] }, { ...prev[1] }];
-      next[idx] = { ...next[idx], ...patch };
+      const next: [CharDraft, CharDraft] = [{ ...prev[0] }, { ...prev[1] }];
+      next[idx] = { ...next[idx], ...p };
       return next;
     });
   }
 
-  // ── Photo picking ─────────────────────────────────────────────
-
-  const pickPhoto = useCallback(async (idx: 0 | 1, source: 'camera' | 'library') => {
-    // Request permission
-    if (source === 'camera') {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'Camera access is needed to take a photo.');
-        return;
-      }
-    } else {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'Photo library access is needed.');
-        return;
-      }
-    }
-
-    const pickerOptions = { mediaTypes: ['images'] as ImagePicker.MediaType[], allowsEditing: true, aspect: [1, 1] as [number, number], quality: 0.85 };
-    const result = source === 'camera'
-      ? await ImagePicker.launchCameraAsync(pickerOptions)
-      : await ImagePicker.launchImageLibraryAsync(pickerOptions);
-
-    if (result.canceled || !result.assets.length) return;
-
-    const asset = result.assets[0];
-
-    // Basic file validation
-    const mimeType = asset.mimeType ?? 'image/jpeg';
-    const fileSize = asset.fileSize ?? 0;
-    const { valid, error } = validateImageFile(fileSize, mimeType);
-    if (!valid) {
-      Alert.alert('Invalid photo', t(`errors.${error}`));
-      return;
-    }
-
-    // Set photo and start face check
-    patchChar(idx, { photoUri: asset.uri, faceState: 'checking', traits: chars[idx].traits });
-
-    try {
-      const hasFace = await detectFaceInImage(asset.uri);
-      if (hasFace) {
-        patchChar(idx, { faceState: 'ok' });
-      } else {
-        patchChar(idx, { photoUri: null, faceState: 'error' });
-        Alert.alert('No face detected', t('errors.upload_face'));
-      }
-    } catch {
-      patchChar(idx, { photoUri: null, faceState: 'error' });
-      Alert.alert('Validation failed', t('errors.generic'));
-    }
-  }, [chars, t]);
-
-  function showPhotoPicker(idx: 0 | 1) {
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        { options: ['Cancel', 'Take Photo', 'Choose from Library'], cancelButtonIndex: 0 },
-        (buttonIndex) => {
-          if (buttonIndex === 1) pickPhoto(idx, 'camera');
-          if (buttonIndex === 2) pickPhoto(idx, 'library');
-        }
-      );
-    } else {
-      // Android: simple alert as fallback (can be replaced with a native sheet)
-      Alert.alert('Select photo', '', [
-        { text: 'Take Photo',          onPress: () => pickPhoto(idx, 'camera') },
-        { text: 'Choose from Library', onPress: () => pickPhoto(idx, 'library') },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-    }
-  }
-
-  // ── Traits ────────────────────────────────────────────────────
-
-  function addTrait(idx: 0 | 1) {
-    const raw = chars[idx].traitInput.trim();
-    if (!raw) return;
-    if (chars[idx].traits.length >= MAX_TRAITS) return;
-    if (chars[idx].traits.some((t) => t.toLowerCase() === raw.toLowerCase())) return;
-    patchChar(idx, { traits: [...chars[idx].traits, raw], traitInput: '' });
-  }
-
-  function removeTrait(idx: 0 | 1, traitIdx: number) {
-    const next = chars[idx].traits.filter((_, i) => i !== traitIdx);
-    patchChar(idx, { traits: next });
-  }
-
-  // ── Submit ────────────────────────────────────────────────────
-
   const canSubmit =
-    !submitting &&
-    chars[0].faceState === 'ok' && chars[0].name.trim().length > 0 &&
-    chars[1].faceState === 'ok' && chars[1].name.trim().length > 0;
+    !submitting && isCharComplete(chars[0]) && isCharComplete(chars[1]);
 
   async function handleStartStory() {
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      // Build multipart form — photos travel alongside wizard data
-      const formData = new FormData();
+      const body = {
+        genre:              wizard.genre,
+        genre_subtype:      wizard.genre_subtype ?? undefined,
+        story_elements:     wizard.story_elements?.length ? JSON.stringify(wizard.story_elements) : undefined,
+        setting:            wizard.setting,
+        tone:               wizard.tone,
+        length:             wizard.length,
+        art_style:          wizard.art_style,
+        main_name:          chars[0].name.trim(),
+        main_traits:        JSON.stringify([]),
+        main_appearance:    buildAppearance(chars[0]),
+        secondary_name:     chars[1].name.trim(),
+        secondary_traits:   JSON.stringify([]),
+        secondary_appearance: buildAppearance(chars[1]),
+      };
 
-      // Wizard fields
-      formData.append('genre',     wizard.genre);
-      formData.append('setting',   wizard.setting);
-      formData.append('tone',      wizard.tone);
-      formData.append('length',    wizard.length);
-      formData.append('art_style', wizard.art_style);
+      const { data } = await api.post('/stories', body);
 
-      // Character metadata
-      formData.append('main_name',          chars[0].name.trim());
-      formData.append('main_traits',        JSON.stringify(chars[0].traits));
-      formData.append('secondary_name',     chars[1].name.trim());
-      formData.append('secondary_traits',   JSON.stringify(chars[1].traits));
-
-      // Photo files — React Native FormData accepts { uri, type, name }
-      formData.append('main_photo', {
-        uri:  chars[0].photoUri!,
-        type: 'image/jpeg',
-        name: 'main.jpg',
-      } as unknown as Blob);
-      formData.append('secondary_photo', {
-        uri:  chars[1].photoUri!,
-        type: 'image/jpeg',
-        name: 'secondary.jpg',
-      } as unknown as Blob);
-
-      const { data } = await api.post('/stories', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-
+      deductCredits(STORY_CREDIT_COSTS[wizard.length as keyof typeof STORY_CREDIT_COSTS]);
       setActiveStory(data.story);
       navigation.navigate('LoadingScene', { storyId: data.story.id });
     } catch (err: any) {
-      const message = err?.response?.data?.error ?? t('errors.generic');
-      Alert.alert('Error', message);
+      Alert.alert('Error', err?.response?.data?.error ?? 'Something went wrong. Please try again.');
     } finally {
       setSubmitting(false);
     }
   }
 
-  // ── Render a single character card ───────────────────────────
-
-  function renderCard(idx: 0 | 1) {
-    const char   = chars[idx];
-    const isMain = idx === 0;
-    const label  = isMain ? t('characters.upload_main') : t('characters.upload_secondary');
-
-    return (
-      <View key={idx} style={styles.card}>
-        {/* Card header */}
-        <View style={styles.cardHeader}>
-          <View style={[styles.rolePill, isMain && styles.rolePillMain]}>
-            <Text style={[styles.rolePillText, isMain && styles.rolePillTextMain]}>
-              {isMain ? 'Main' : 'Secondary'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Photo slot */}
-        <TouchableOpacity
-          style={[
-            styles.photoSlot,
-            char.faceState === 'ok'    && styles.photoSlotOk,
-            char.faceState === 'error' && styles.photoSlotError,
-          ]}
-          onPress={() => showPhotoPicker(idx)}
-          activeOpacity={0.8}
-          disabled={char.faceState === 'checking'}
-        >
-          {char.photoUri ? (
-            <>
-              <Image source={{ uri: char.photoUri }} style={styles.photoImage} />
-              {char.faceState === 'checking' && (
-                <View style={styles.photoOverlay}>
-                  <ActivityIndicator color="#fff" size="large" />
-                  <Text style={styles.checkingText}>Checking photo…</Text>
-                </View>
-              )}
-              {char.faceState === 'ok' && (
-                <View style={styles.faceOkBadge}>
-                  <Text style={styles.faceOkText}>✓</Text>
-                </View>
-              )}
-            </>
-          ) : (
-            <View style={styles.photoPlaceholder}>
-              <Text style={styles.photoPlaceholderIcon}>
-                {char.faceState === 'error' ? '⚠️' : '📷'}
-              </Text>
-              <Text style={styles.photoPlaceholderText}>
-                {char.faceState === 'error' ? 'No face detected\nTap to retry' : label}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        {/* Name input */}
-        <TextInput
-          style={styles.nameInput}
-          placeholder={t('characters.name_placeholder')}
-          placeholderTextColor="#A0AEBA"
-          value={char.name}
-          onChangeText={(v) => patchChar(idx, { name: v.slice(0, MAX_NAME) })}
-          maxLength={MAX_NAME}
-          returnKeyType="done"
-        />
-        <Text style={styles.nameCounter}>{char.name.length}/{MAX_NAME}</Text>
-
-        {/* Traits */}
-        <View style={styles.traitsSection}>
-          {char.traits.length > 0 && (
-            <View style={styles.traitChips}>
-              {char.traits.map((trait, ti) => (
-                <TouchableOpacity
-                  key={ti}
-                  style={styles.traitChip}
-                  onPress={() => removeTrait(idx, ti)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.traitChipText}>{trait}</Text>
-                  <Text style={styles.traitChipRemove}>×</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {char.traits.length < MAX_TRAITS && (
-            <View style={styles.traitRow}>
-              <TextInput
-                style={styles.traitInput}
-                placeholder={char.traits.length === 0 ? t('characters.traits_placeholder') : 'Add another trait…'}
-                placeholderTextColor="#A0AEBA"
-                value={char.traitInput}
-                onChangeText={(v) => patchChar(idx, { traitInput: v })}
-                onSubmitEditing={() => addTrait(idx)}
-                maxLength={20}
-                returnKeyType="done"
-              />
-              <TouchableOpacity
-                style={[styles.addTraitBtn, !char.traitInput.trim() && styles.addTraitBtnDisabled]}
-                onPress={() => addTrait(idx)}
-                disabled={!char.traitInput.trim()}
-              >
-                <Text style={styles.addTraitBtnText}>+</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {char.traits.length >= MAX_TRAITS && (
-            <Text style={styles.traitsMaxNote}>Max 3 traits</Text>
-          )}
-        </View>
-      </View>
-    );
-  }
-
-  // ── UI ────────────────────────────────────────────────────────
-
   return (
     <View style={styles.screen}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>👥 Characters</Text>
+          <Text style={styles.headerTitle}>Create Characters</Text>
+          <Text style={styles.headerSubtitle}>Design your cast</Text>
         </View>
-        <View style={{ width: 32 }} />
+        <View style={{ width: 28 }} />
       </View>
 
-      {/* Sub-header */}
-      <Text style={styles.subHeader}>Upload a photo for each character</Text>
+      {/* Tab switcher */}
+      <View style={styles.tabRow}>
+        {(['Main Character', 'Secondary'] as const).map((label, idx) => {
+          const done = isCharComplete(chars[idx as 0 | 1]);
+          const active = activeTab === idx;
+          return (
+            <TouchableOpacity
+              key={idx}
+              style={[styles.tab, active && styles.tabActive]}
+              onPress={() => setActiveTab(idx as 0 | 1)}
+              activeOpacity={0.8}
+            >
+              {done && <Text style={styles.tabDoneIcon}>✓ </Text>}
+              <Text style={[styles.tabText, active && styles.tabTextActive]}>
+                {idx === 0 ? '★ ' : '◆ '}{label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
 
-      {/* Cards */}
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {renderCard(0)}
-        {renderCard(1)}
-        <View style={{ height: 16 }} />
-      </ScrollView>
+      <CharacterBuilder
+        char={chars[activeTab]}
+        isMain={activeTab === 0}
+        onChange={(p) => patch(activeTab, p)}
+      />
 
       {/* Footer */}
       <View style={styles.footer}>
+        {!canSubmit && (
+          <Text style={styles.footerHint}>
+            {!isCharComplete(chars[0])
+              ? 'Complete Main Character first'
+              : !isCharComplete(chars[1])
+              ? 'Complete Secondary Character'
+              : 'Almost ready!'}
+          </Text>
+        )}
         <TouchableOpacity
           style={[styles.startButton, !canSubmit && styles.startButtonDisabled]}
           onPress={handleStartStory}
           disabled={!canSubmit}
           activeOpacity={0.85}
         >
-          {submitting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.startButtonText}>Start Story →</Text>
-          )}
+          {submitting
+            ? <DiamondLoader size={22} animated showSparkles={false} />
+            : <Text style={styles.startButtonText}>Begin Story →</Text>}
         </TouchableOpacity>
       </View>
     </View>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────
+// ── CharacterBuilder sub-component ───────────────────────────────────────────
+
+interface BuilderProps {
+  char:     CharDraft;
+  isMain:   boolean;
+  onChange: (p: Partial<CharDraft>) => void;
+}
+
+function CharacterBuilder({ char, isMain, onChange }: BuilderProps) {
+  return (
+    <ScrollView
+      contentContainerStyle={styles.builderScroll}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
+      {/* Name */}
+      <Section icon="🏷" title="Character Name">
+        <TextInput
+          style={styles.nameInput}
+          placeholder={isMain ? 'Enter main character name…' : 'Enter secondary character name…'}
+          placeholderTextColor={colors.textMuted}
+          value={char.name}
+          onChangeText={(v) => onChange({ name: v.slice(0, 20) })}
+          maxLength={20}
+          returnKeyType="done"
+        />
+        <Text style={styles.nameCounter}>{char.name.length}/20</Text>
+      </Section>
+
+      {/* Age Range */}
+      <Section icon="🗓" title="Age Range">
+        <View style={styles.pillRow}>
+          {AGE_RANGES.map((opt) => (
+            <Pill
+              key={opt.value}
+              icon={opt.icon}
+              label={opt.value}
+              sub={opt.desc}
+              selected={char.ageRange === opt.value}
+              onPress={() => onChange({ ageRange: opt.value })}
+            />
+          ))}
+        </View>
+      </Section>
+
+      {/* Gender */}
+      <Section icon="⚧" title="Gender">
+        <View style={styles.pillRow}>
+          {GENDERS.map((opt) => (
+            <Pill
+              key={opt.value}
+              icon={opt.icon}
+              label={opt.value}
+              selected={char.gender === opt.value}
+              onPress={() => onChange({ gender: opt.value })}
+            />
+          ))}
+        </View>
+      </Section>
+
+      {/* Body Type */}
+      <Section icon="🏃" title="Body Type">
+        <View style={styles.pillGrid}>
+          {BODY_TYPES.map((opt) => (
+            <Pill
+              key={opt.value}
+              icon={opt.icon}
+              label={opt.value}
+              selected={char.bodyType === opt.value}
+              onPress={() => onChange({ bodyType: opt.value })}
+              compact
+            />
+          ))}
+        </View>
+      </Section>
+
+      {/* Skin Tone */}
+      <Section icon="🖐" title="Skin Tone">
+        <View style={styles.swatchRow}>
+          {SKIN_TONES.map((opt) => (
+            <ColorSwatch
+              key={opt.value}
+              hex={opt.hex}
+              label={opt.value}
+              selected={char.skinTone === opt.value}
+              onPress={() => onChange({ skinTone: opt.value })}
+            />
+          ))}
+        </View>
+      </Section>
+
+      {/* Hair Color */}
+      <Section icon="💈" title="Hair Color">
+        <View style={styles.swatchRow}>
+          {HAIR_COLORS.map((opt) => (
+            <ColorSwatch
+              key={opt.value}
+              hex={opt.hex}
+              label={opt.value}
+              selected={char.hairColor === opt.value}
+              onPress={() => onChange({ hairColor: opt.value })}
+            />
+          ))}
+        </View>
+      </Section>
+
+      {/* Hair Style */}
+      <Section icon="✂️" title="Hair Style">
+        <View style={styles.pillGrid}>
+          {HAIR_STYLES.map((opt) => (
+            <Pill
+              key={opt.value}
+              icon={opt.icon}
+              label={opt.value}
+              selected={char.hairStyle === opt.value}
+              onPress={() => onChange({ hairStyle: opt.value })}
+              compact
+            />
+          ))}
+        </View>
+      </Section>
+
+      {/* Eye Color */}
+      <Section icon="👁" title="Eye Color">
+        <View style={styles.swatchRow}>
+          {EYE_COLORS.map((opt) => (
+            <ColorSwatch
+              key={opt.value}
+              hex={opt.hex}
+              label={opt.value}
+              selected={char.eyeColor === opt.value}
+              onPress={() => onChange({ eyeColor: opt.value })}
+            />
+          ))}
+        </View>
+      </Section>
+
+      {/* Outfit Style */}
+      <Section icon="👗" title="Outfit Style">
+        <View style={styles.pillGrid}>
+          {OUTFIT_STYLES.map((opt) => (
+            <Pill
+              key={opt.value}
+              icon={opt.icon}
+              label={opt.value}
+              selected={char.outfit === opt.value}
+              onPress={() => onChange({ outfit: opt.value })}
+              compact
+            />
+          ))}
+        </View>
+      </Section>
+
+      {/* Distinguishing Feature */}
+      <Section icon="⭐" title="Distinguishing Feature">
+        <View style={styles.pillGrid}>
+          {FEATURES.map((opt) => (
+            <Pill
+              key={opt.value}
+              icon={opt.icon}
+              label={opt.value}
+              selected={char.feature === opt.value}
+              onPress={() => onChange({ feature: opt.value })}
+              compact
+            />
+          ))}
+        </View>
+      </Section>
+
+      {/* Appearance preview */}
+      {isCharComplete({ ...char, feature: char.feature ?? 'None' }) && (
+        <View style={styles.previewCard}>
+          <Text style={styles.previewLabel}>CHARACTER APPEARANCE</Text>
+          <Text style={styles.previewText}>{buildAppearance({ ...char, feature: char.feature ?? 'None' })}</Text>
+        </View>
+      )}
+
+      <View style={{ height: 24 }} />
+    </ScrollView>
+  );
+}
+
+// ── Reusable Section ─────────────────────────────────────────────────────────
+
+function Section({ icon, title, children }: { icon: string; title: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionIcon}>{icon}</Text>
+        <Text style={styles.sectionTitle}>{title}</Text>
+      </View>
+      {children}
+    </View>
+  );
+}
+
+// ── Pill button ──────────────────────────────────────────────────────────────
+
+interface PillProps {
+  icon:     string;
+  label:    string;
+  sub?:     string;
+  selected: boolean;
+  onPress:  () => void;
+  compact?: boolean;
+}
+
+function Pill({ icon, label, sub, selected, onPress, compact }: PillProps) {
+  return (
+    <TouchableOpacity
+      style={[styles.pill, selected && styles.pillSelected, compact && styles.pillCompact]}
+      onPress={onPress}
+      activeOpacity={0.75}
+    >
+      <Text style={[styles.pillIcon, compact && styles.pillIconCompact]}>{icon}</Text>
+      <View>
+        <Text style={[styles.pillLabel, selected && styles.pillLabelSelected, compact && styles.pillLabelCompact]}>
+          {label}
+        </Text>
+        {sub && !compact && (
+          <Text style={styles.pillSub}>{sub}</Text>
+        )}
+      </View>
+      {selected && !compact && <Text style={styles.pillCheck}>✓</Text>}
+    </TouchableOpacity>
+  );
+}
+
+// ── Color swatch ─────────────────────────────────────────────────────────────
+
+interface SwatchProps {
+  hex:      string;
+  label:    string;
+  selected: boolean;
+  onPress:  () => void;
+}
+
+function ColorSwatch({ hex, label, selected, onPress }: SwatchProps) {
+  const isLight = hex === '#EEEEEE' || hex === '#F5F5F5' || hex === '#FDDBB4' || hex === '#F2C88F' || hex === '#F5D07A';
+  return (
+    <TouchableOpacity
+      style={[styles.swatch, selected && styles.swatchSelected]}
+      onPress={onPress}
+      activeOpacity={0.75}
+    >
+      <View
+        style={[
+          styles.swatchCircle,
+          { backgroundColor: hex },
+          isLight && styles.swatchCircleLight,
+          selected && styles.swatchCircleSelected,
+        ]}
+      >
+        {selected && (
+          <Text style={[styles.swatchCheck, isLight && styles.swatchCheckDark]}>✓</Text>
+        )}
+      </View>
+      <Text style={[styles.swatchLabel, selected && styles.swatchLabelSelected]} numberOfLines={1}>
+        {label.split(' ')[0]}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+// ── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: '#FAFAFA',
-  },
+  screen: { flex: 1, backgroundColor: colors.bg },
 
-  // Header
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     paddingHorizontal: 24,
-    paddingTop: 56,
-    paddingBottom: 8,
+    paddingTop: 60,
+    paddingBottom: 16,
   },
-  backText: {
-    fontSize: 22,
-    color: '#2E4057',
-    width: 32,
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#2E4057',
-  },
-  subHeader: {
-    fontSize: 14,
-    color: '#6B7C93',
-    textAlign: 'center',
-    marginBottom: 16,
-    paddingHorizontal: 24,
-  },
+  backText:      { fontSize: 22, color: colors.textSecondary, width: 28, marginTop: 2 },
+  headerCenter:  { flex: 1, alignItems: 'center' },
+  headerTitle:   { fontSize: 20, fontWeight: '800', color: colors.textPrimary },
+  headerSubtitle: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
 
-  // Scroll
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 8,
-    gap: 16,
-  },
-
-  // Card
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 20,
-    shadowColor: '#2E4057',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  cardHeader: {
+  // Tabs
+  tabRow: {
     flexDirection: 'row',
-    marginBottom: 14,
-  },
-  rolePill: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
-    backgroundColor: '#F0F4F8',
-  },
-  rolePillMain: {
-    backgroundColor: '#E6F5F4',
-  },
-  rolePillText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#6B7C93',
-  },
-  rolePillTextMain: {
-    color: '#048A81',
-  },
-
-  // Photo slot
-  photoSlot: {
-    height: 180,
-    borderRadius: 14,
-    backgroundColor: '#F0F4F8',
-    borderWidth: 2,
-    borderColor: 'transparent',
-    borderStyle: 'dashed',
-    overflow: 'hidden',
-    marginBottom: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  photoSlotOk: {
-    borderStyle: 'solid',
-    borderColor: '#048A81',
-  },
-  photoSlotError: {
-    borderStyle: 'solid',
-    borderColor: '#E0533A',
-    backgroundColor: '#FFF4F2',
-  },
-  photoImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  photoOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 20,
     gap: 10,
+    marginBottom: 4,
   },
-  checkingText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  faceOkBadge: {
-    position: 'absolute',
-    bottom: 10,
-    right: 10,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#048A81',
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: colors.bgCard,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    gap: 4,
   },
-  faceOkText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
+  tabActive: {
+    backgroundColor: colors.plumbobGlow,
+    borderColor: colors.plumbob,
   },
-  photoPlaceholder: {
-    alignItems: 'center',
-    gap: 8,
+  tabDoneIcon: { fontSize: 10, color: colors.plumbob, fontWeight: '800' },
+  tabText:     { fontSize: 12, color: colors.textMuted, fontWeight: '700' },
+  tabTextActive: { color: colors.plumbob },
+
+  // Builder scroll
+  builderScroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
+
+  // Sections
+  section: { marginBottom: 20 },
+  sectionHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10,
   },
-  photoPlaceholderIcon: {
-    fontSize: 36,
-  },
-  photoPlaceholderText: {
-    fontSize: 14,
-    color: '#6B7C93',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
+  sectionIcon:  { fontSize: 16 },
+  sectionTitle: { fontSize: 13, fontWeight: '800', color: colors.textSecondary, letterSpacing: 0.5 },
 
   // Name input
   nameInput: {
-    borderWidth: 1.5,
-    borderColor: '#DCE4EB',
-    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 11,
+    paddingVertical: 12,
     fontSize: 16,
-    color: '#2E4057',
-    backgroundColor: '#FAFAFA',
+    color: colors.textPrimary,
+    backgroundColor: colors.bgSurface,
   },
-  nameCounter: {
-    fontSize: 11,
-    color: '#A0AEBA',
-    textAlign: 'right',
-    marginTop: 4,
-    marginBottom: 10,
-  },
+  nameCounter: { fontSize: 11, color: colors.textMuted, textAlign: 'right', marginTop: 4 },
 
-  // Traits
-  traitsSection: {
-    gap: 8,
-  },
-  traitChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  traitChip: {
+  // Pill layouts
+  pillRow:  { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  pillGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+
+  // Pill
+  pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E6F5F4',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 6,
-  },
-  traitChipText: {
-    fontSize: 13,
-    color: '#048A81',
-    fontWeight: '600',
-  },
-  traitChipRemove: {
-    fontSize: 15,
-    color: '#048A81',
-    lineHeight: 16,
-  },
-  traitRow: {
-    flexDirection: 'row',
     gap: 8,
-    alignItems: 'center',
-  },
-  traitInput: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: '#DCE4EB',
-    borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 9,
-    fontSize: 14,
-    color: '#2E4057',
-    backgroundColor: '#FAFAFA',
+    borderRadius: 12,
+    backgroundColor: colors.bgCard,
+    borderWidth: 1.5,
+    borderColor: colors.border,
   },
-  addTraitBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: '#048A81',
+  pillSelected: {
+    backgroundColor: colors.plumbobGlow,
+    borderColor: colors.plumbob,
+  },
+  pillCompact: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    gap: 6,
+  },
+  pillIcon:        { fontSize: 16 },
+  pillIconCompact: { fontSize: 13 },
+  pillLabel: {
+    fontSize: 13, color: colors.textSecondary, fontWeight: '600',
+  },
+  pillLabelSelected: { color: colors.plumbob, fontWeight: '700' },
+  pillLabelCompact:  { fontSize: 12 },
+  pillSub:   { fontSize: 10, color: colors.textMuted, marginTop: 1 },
+  pillCheck: { fontSize: 11, color: colors.plumbob, marginLeft: 'auto', fontWeight: '800' },
+
+  // Swatch row
+  swatchRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  swatch: {
+    alignItems: 'center',
+    gap: 4,
+    width: 52,
+  },
+  swatchSelected: {},
+  swatchCircle: {
+    width: 38, height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
-  addTraitBtnDisabled: {
-    backgroundColor: '#C8D8DC',
+  swatchCircleLight:    { borderColor: colors.border },
+  swatchCircleSelected: { borderColor: colors.plumbob, borderWidth: 3 },
+  swatchCheck:      { fontSize: 14, color: '#fff', fontWeight: '800' },
+  swatchCheckDark:  { color: '#333' },
+  swatchLabel: {
+    fontSize: 9, color: colors.textMuted,
+    textAlign: 'center', fontWeight: '600',
   },
-  addTraitBtnText: {
-    color: '#fff',
-    fontSize: 20,
-    lineHeight: 22,
-    fontWeight: '600',
+  swatchLabelSelected: { color: colors.plumbob },
+
+  // Appearance preview
+  previewCard: {
+    backgroundColor: colors.plumbobGlow,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.plumbobBorder,
+    padding: 14,
+    marginTop: 4,
+    marginBottom: 8,
   },
-  traitsMaxNote: {
-    fontSize: 12,
-    color: '#A0AEBA',
+  previewLabel: {
+    fontSize: 9, fontWeight: '800', color: colors.plumbob,
+    letterSpacing: 2, marginBottom: 6,
+  },
+  previewText: {
+    fontSize: 13, color: colors.textSecondary,
+    lineHeight: 20, fontStyle: 'italic',
   },
 
   // Footer
   footer: {
     paddingHorizontal: 24,
-    paddingBottom: 40,
+    paddingBottom: 44,
     paddingTop: 12,
-    backgroundColor: '#FAFAFA',
     borderTopWidth: 1,
-    borderTopColor: '#F0F4F8',
+    borderTopColor: colors.border,
+    backgroundColor: colors.bg,
+    gap: 8,
   },
+  footerHint: { fontSize: 12, color: colors.textMuted, textAlign: 'center' },
   startButton: {
-    backgroundColor: '#048A81',
-    borderRadius: 14,
-    paddingVertical: 17,
-    alignItems: 'center',
+    backgroundColor: colors.plumbob,
+    borderRadius: 14, paddingVertical: 17, alignItems: 'center',
+    shadowColor: colors.plumbob,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
   },
   startButtonDisabled: {
-    backgroundColor: '#C8D8DC',
+    backgroundColor: colors.bgCard,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowOpacity: 0,
+    elevation: 0,
   },
-  startButtonText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
+  startButtonText: { color: colors.bg, fontSize: 17, fontWeight: '700', letterSpacing: 0.2 },
 });

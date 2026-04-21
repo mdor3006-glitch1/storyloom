@@ -1,7 +1,38 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git remote:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)",
+      "Bash(npm install:*)",
+      "Bash(node -e \"require\\('./src/config/logger'\\)\")",
+      "Bash(node -e ':*)",
+      "Bash(ls /c/Users/mdor3/Desktop/AIPics/storyloom-ai/.env*)",
+      "Bash(ls /c/Users/mdor3/Desktop/AIPics/storyloom-backend/.env*)",
+      "Bash(anything that you want to do from now)",
+      "Bash(python3 -c \"import json,sys; p=json.load\\(sys.stdin\\); print\\('expo peerDeps react:', p.get\\('peerDependencies',{}\\).get\\('react','not found'\\)\\); print\\('expo peerDeps react-native:', p.get\\('peerDependencies',{}\\).get\\('react-native','not found'\\)\\)\")",
+      "Bash(node:*)",
+      "Bash(ls /c/Users/mdor3/Desktop/AIPics/storyloom-ai/node_modules/react-native-reanimated/plugin*)",
+      "Bash(npx tsc:*)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(echo \"TypeScript EXIT:$?\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(list\\(d.get\\('scene',{}\\).keys\\(\\)\\)\\)\")",
+      "Bash(echo \"TS EXIT:$?\")",
+      "Bash(ipconfig)",
+      "Bash(python3 -c ':*)",
+      "Bash(xxd /c/Users/mdor3/Desktop/AIPics/storyloom-ai/src/utils/imageHelpers.ts)",
+      "Bash(python3:*)",
+      "Bash(iconv -f utf-8 -t utf-8 /c/Users/mdor3/Desktop/AIPics/storyloom-ai/src/i18n/he.json)",
+      "Bash(curl -s http://localhost:3000/health)",
+      "Bash(curl -s -X POST http://localhost:3000/auth/login -H 'Content-Type: application/json' -d '{\"email\":\"test@test.com\",\"password\":\"wrongpass\"}')",
+      "Bash(pkill -f \"node src/index.js\")",
+      "Bash(netstat -ano)",
+      "Bash(taskkill /PID 6940 /F)",
+      "Bash(cmd //c \"taskkill /F /PID 6940\")",
+      "Bash(read pid:*)",
+      "Bash(cmd //c 'taskkill /F /PID __TRACKED_VAR__')"
     ]
   }
 }

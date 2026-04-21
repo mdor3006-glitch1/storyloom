@@ -115,4 +115,71 @@ router.get('/stats', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ── GET /admin/metrics/stage_v2 ───────────────────────────────
+// STAGE v2 observability: pregen hit/miss/duration + prediction accuracy.
+router.get('/metrics/stage_v2', async (_req, res, next) => {
+  try {
+    const { getMetricsSnapshot } = require('../services/PregenerationService');
+    const snap = getMetricsSnapshot();
+
+    const { count: totalBundles } = await supabaseAdmin
+      .from('pregen_bundles').select('*', { count: 'exact', head: true });
+
+    const { count: readyBundles } = await supabaseAdmin
+      .from('pregen_bundles').select('*', { count: 'exact', head: true }).eq('status', 'ready');
+
+    const { count: failedBundles } = await supabaseAdmin
+      .from('pregen_bundles').select('*', { count: 'exact', head: true }).eq('status', 'failed');
+
+    const { data: flagRow } = await supabaseAdmin
+      .from('system_flags').select('value').eq('key', 'pregen_enabled').maybeSingle();
+    const pregenEnabled = typeof flagRow?.value === 'boolean'
+      ? flagRow.value
+      : (typeof flagRow?.value === 'string' ? flagRow.value === 'true' : Boolean(flagRow?.value));
+
+    return res.json({
+      ...snap,
+      bundles_total:  totalBundles ?? 0,
+      bundles_ready:  readyBundles ?? 0,
+      bundles_failed: failedBundles ?? 0,
+      pregen_enabled: pregenEnabled,
+    });
+  } catch (err) { next(err); }
+});
+
+// ── POST /admin/pregen/kill-switch ────────────────────────────
+// Flip global pregen on/off. Body: { enabled: boolean }
+router.post('/pregen/kill-switch', async (req, res, next) => {
+  try {
+    const { enabled } = req.body ?? {};
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled must be boolean.' });
+    }
+    const { error } = await supabaseAdmin
+      .from('system_flags')
+      .upsert({ key: 'pregen_enabled', value: enabled });
+    if (error) throw error;
+    return res.json({ ok: true, pregen_enabled: enabled });
+  } catch (err) { next(err); }
+});
+
+// ── PATCH /admin/users/:id/flags ──────────────────────────────
+// Toggle per-user feature flag (e.g. new_stage_v2). Body: { flag, value }
+router.patch('/users/:id/flags', async (req, res, next) => {
+  try {
+    const { flag, value } = req.body ?? {};
+    if (typeof flag !== 'string' || typeof value !== 'boolean') {
+      return res.status(400).json({ error: 'flag (string) and value (boolean) required.' });
+    }
+    const { data: user } = await supabaseAdmin
+      .from('users').select('flags').eq('id', req.params.id).maybeSingle();
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    const flags = { ...(user.flags ?? {}), [flag]: value };
+    const { error } = await supabaseAdmin
+      .from('users').update({ flags }).eq('id', req.params.id);
+    if (error) throw error;
+    return res.json({ ok: true, flags });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;

@@ -25,13 +25,35 @@ export interface Scene {
   id: string;
   scene_number: number;
   scene_text: string;
-  dialogue: Array<{ character: string; line: string }>;
+  dialogue: Array<{
+    character: string;
+    line: string;
+    emotion?: string;
+  }>;
   choices: string[];
+  choice_hints?: string[];
+  choice_reaction?: { emoji: string; character: string };
   image_url: string | null;
+  blurhash?: string | null;
   is_undo_snapshot: boolean;
   twist_occurred: boolean;
   twist_type: string | null;
   is_final_scene: boolean;
+  story_tension_score?: number;
+  time_of_day?: 'morning' | 'afternoon' | 'evening' | 'night';
+  weather?: 'clear' | 'cloudy' | 'rain' | 'storm' | 'snow' | 'fog';
+  ending_type?: 'happy' | 'tragic' | 'twist' | 'secret';
+  best_quote?: string;
+  // STAGE v2
+  scene_type?: 'A' | 'B';
+  can_text_input?: boolean;
+  filler_dialogue?: Array<{
+    character: string;
+    line: string;
+    emotion?: string;
+    beat_ms?: number;
+  }>;
+  schema_version?: number;
 }
 
 export interface Story {
@@ -47,6 +69,10 @@ export interface Story {
   credits_spent: number;
   is_favourite: boolean;
   completed_at: string | null;
+  story_tension_score?: number;
+  last_image_url?: string | null;
+  expires_at?: string | null;
+  ending_type?: 'happy' | 'tragic' | 'twist' | 'secret';
 }
 
 interface StoryState {

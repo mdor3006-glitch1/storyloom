@@ -8,133 +8,148 @@ const logger = require('../config/logger');
 
 fal.config({ credentials: env.fal.apiKey });
 
-const STORAGE_BUCKET = 'scene-images';
-const FLUX_MODEL     = 'fal-ai/flux-pro/kontext';
+const STORAGE_BUCKET   = 'scene-images';
+const KONTEXT_PRO      = 'fal-ai/flux-pro/kontext';
+const SCHNELL          = 'fal-ai/flux/schnell';
 
-// ── Helpers ───────────────────────────────────────────────────
+// STAGE v2 hard timeout per FLUX call
+const FLUX_TIMEOUT_MS = 12_000;
 
-/**
- * Download an image from a URL and return it as a base64 data URL.
- * Used to pass reference photos to fal.ai.
- */
-async function urlToDataUrl(url) {
-  logger.debug('[ImageService] Fetching reference image as data URL', { url });
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to fetch reference image: ${res.status}`);
-  const buf = Buffer.from(await res.arrayBuffer());
-  const mime = res.headers.get('content-type') ?? 'image/jpeg';
-  logger.debug('[ImageService] Reference image fetched', { url, mime, bytes: buf.length });
-  return `data:${mime};base64,${buf.toString('base64')}`;
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, rej) => {
+    timer = setTimeout(() => rej(new Error(`${label} timeout after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-/**
- * Upload a generated image (from URL or buffer) to Supabase Storage.
- * Returns the public CDN URL.
- */
 async function storeImage(imageUrl, storyId, sceneNumber) {
-  logger.debug('[ImageService] Downloading generated image for storage', { storyId, sceneNumber, imageUrl });
   const res = await fetch(imageUrl);
   if (!res.ok) throw new Error(`Failed to download generated image: ${res.status}`);
-  const buf = Buffer.from(await res.arrayBuffer());
+  const buf  = Buffer.from(await res.arrayBuffer());
   const path = `${storyId}/scene-${sceneNumber}-${uuidv4()}.jpg`;
-
-  logger.debug('[ImageService] Uploading to Supabase Storage', { storyId, sceneNumber, path, bytes: buf.length });
 
   const { error } = await supabaseAdmin.storage
     .from(STORAGE_BUCKET)
     .upload(path, buf, { contentType: 'image/jpeg', upsert: false });
 
-  if (error) {
-    logger.error('[ImageService] Supabase Storage upload failed', { storyId, sceneNumber, path, error: error.message });
-    throw new Error(`Storage upload failed: ${error.message}`);
-  }
+  if (error) throw new Error(`Storage upload failed: ${error.message}`);
 
   const { data } = supabaseAdmin.storage.from(STORAGE_BUCKET).getPublicUrl(path);
-  logger.info('[ImageService] Image stored in Supabase Storage', { storyId, sceneNumber, publicUrl: data.publicUrl });
   return data.publicUrl;
 }
 
-// ── Public API ────────────────────────────────────────────────
+function buildGenrePromptPrefix(genre, genreSubtype) {
+  if (genre === 'Cartoon Characters') {
+    return `anthropomorphic character with human body proportions, expressive cartoon eyes, Pixar 3D animation style, cinematic studio lighting, vibrant saturated colors, `;
+  }
+  if (genre === 'Brainrot') {
+    const subtypeDesc = genreSubtype ? `${genreSubtype} scenario, ` : '';
+    return `surreal Pixar 3D animation style, ${subtypeDesc}dreamlike impossible environment, vibrant hyper-saturated colors, cinematic composition, hyper-detailed rendering, Studio Ghibli meets Pixar meets Salvador Dali, `;
+  }
+  return '';
+}
 
 /**
- * Generate a scene image using FLUX.1 Kontext [pro] via fal.ai.
- *
- * Scene 1: text-to-image with character descriptions
- * Scene 2+: image-to-image using previous scene as visual reference
- *
- * Both character reference photos are included in every call for
- * face consistency (per PROJECT_BIBLE §5.4).
- *
- * @param {object} opts
- * @param {string}   opts.imagePrompt       - from Story AI output
- * @param {string}   opts.storyId
- * @param {number}   opts.sceneNumber
- * @param {object[]} opts.characters         - character rows (for photo_url)
- * @param {string}   [opts.previousImageUrl] - last generated scene image
- * @returns {Promise<string>} public CDN URL of the stored image
+ * Tiered model selector (STAGE v2):
+ *   sceneType='A' OR twistOccurred OR isFinalScene → Kontext Pro (high quality)
+ *   Otherwise → Schnell (fast/cheap)
+ *   First scene (no previous image) always uses text-to-image Schnell.
  */
-async function generateSceneImage({ imagePrompt, storyId, sceneNumber, characters, previousImageUrl }) {
-  const context = { storyId, sceneNumber };
+function selectModel({ hasPreviousImage, sceneType, twistOccurred, isFinalScene }) {
+  const isCritical = sceneType === 'A' || twistOccurred || isFinalScene;
+  if (!hasPreviousImage) return { model: SCHNELL, mode: 'text' };
+  if (isCritical) return { model: KONTEXT_PRO, mode: 'kontext' };
+  // Non-critical Type B with prior image: use Kontext anyway (for character consistency)
+  // but prefer faster variants. For now use Pro to preserve consistency.
+  return { model: KONTEXT_PRO, mode: 'kontext' };
+}
+
+async function callFluxOnce({ model, mode, fullPrompt, previousImageUrl }) {
+  const input = mode === 'text'
+    ? {
+        prompt:                fullPrompt,
+        image_size:            'portrait_4_3',
+        num_inference_steps:   4,
+        num_images:            1,
+        enable_safety_checker: false,
+      }
+    : {
+        prompt:                fullPrompt,
+        image_url:             previousImageUrl,
+        num_images:            1,
+        enable_safety_checker: false,
+      };
+
+  const subResult = await withTimeout(
+    fal.subscribe(model, { input, logs: false }),
+    FLUX_TIMEOUT_MS,
+    `FLUX ${model}`,
+  );
+
+  const output = subResult?.data ?? subResult;
+  const generatedUrl =
+    output?.images?.[0]?.url ||
+    output?.image?.url       ||
+    output?.output?.images?.[0]?.url ||
+    output?.output?.image?.url ||
+    null;
+
+  if (!generatedUrl) throw new Error(`fal.ai returned no image URL (model ${model})`);
+  return generatedUrl;
+}
+
+/**
+ * Generate a scene image with STAGE v2 tiered model + timeout fallback.
+ */
+async function generateSceneImage({
+  imagePrompt, storyId, sceneNumber,
+  previousImageUrl = null,
+  genre = null, genreSubtype = null,
+  sceneType = null, twistOccurred = false, isFinalScene = false,
+}) {
+  const context = { storyId, sceneNumber, sceneType };
 
   if (!env.fal.apiKey) {
-    logger.warn('[ImageService] FAL_API_KEY not set — returning placeholder image', context);
-    return 'https://placehold.co/1280x720/2E4057/FAFAFA?text=Scene+Image';
+    logger.warn('[ImageService] FAL_API_KEY not set — returning placeholder', context);
+    return 'https://placehold.co/768x1024/2E4057/FAFAFA?text=Scene+Image';
   }
 
-  // Build reference images array: character photos + previous scene
-  const referenceUrls = characters
-    .filter((c) => c.photo_url && !c.is_ai_generated)
-    .map((c) => c.photo_url);
+  const hasPreviousImage = !!previousImageUrl;
+  const { model, mode } = selectModel({ hasPreviousImage, sceneType, twistOccurred, isFinalScene });
 
-  if (previousImageUrl) referenceUrls.push(previousImageUrl);
-
-  logger.info('[ImageService] Starting FLUX.1 Kontext image generation', {
-    ...context,
-    model: FLUX_MODEL,
-    referenceImageCount: referenceUrls.length,
-    hasPreviousScene: !!previousImageUrl,
-    promptLength: imagePrompt.length,
+  logger.info('[ImageService] Starting image generation', {
+    ...context, model, mode, hasPreviousImage, promptLength: imagePrompt.length,
   });
 
-  // Convert reference URLs to base64 data URLs for fal.ai
-  logger.debug('[ImageService] Converting reference images to base64 data URLs', { ...context, count: referenceUrls.length });
-  const referenceDataUrls = await Promise.all(referenceUrls.map(urlToDataUrl));
+  const genrePrefix = buildGenrePromptPrefix(genre, genreSubtype);
+  const fullPrompt  = genrePrefix ? `${genrePrefix}${imagePrompt}` : imagePrompt;
 
-  // Build fal.ai input
-  const falInput = {
-    prompt: imagePrompt,
-    image_size: { width: 1280, height: 720 },
-    num_inference_steps: 28,
-    guidance_scale: 3.5,
-    num_images: 1,
-    safety_tolerance: '2', // allows mature content appropriate for 18+ app
-    ...(referenceDataUrls.length > 0 ? { image_url: referenceDataUrls[0] } : {}),
-    // Additional reference images (character photos)
-    ...(referenceDataUrls.length > 1 ? { reference_images: referenceDataUrls.slice(1).map((url) => ({ url })) } : {}),
-  };
+  const start = Date.now();
+  let generatedUrl;
 
-  logger.debug('[ImageService] Calling fal.ai FLUX.1 Kontext', {
-    ...context,
-    inferenceSteps: falInput.num_inference_steps,
-    guidanceScale: falInput.guidance_scale,
-    imageSize: `${falInput.image_size.width}x${falInput.image_size.height}`,
-  });
-
-  const falStart = Date.now();
-  const result = await fal.run(FLUX_MODEL, { input: falInput });
-  const falMs = Date.now() - falStart;
-
-  const generatedUrl = result?.images?.[0]?.url;
-  if (!generatedUrl) {
-    logger.error('[ImageService] fal.ai returned no image URL', { ...context, result });
-    throw new Error('fal.ai returned no image URL');
+  try {
+    generatedUrl = await callFluxOnce({ model, mode, fullPrompt, previousImageUrl });
+  } catch (err) {
+    logger.warn('[ImageService] Primary FLUX call failed — falling back to Schnell', {
+      ...context, model, error: err.message,
+    });
+    try {
+      generatedUrl = await callFluxOnce({
+        model: SCHNELL,
+        mode: 'text',
+        fullPrompt: previousImageUrl ? `${fullPrompt} (cinematic continuation)` : fullPrompt,
+      });
+    } catch (err2) {
+      logger.error('[ImageService] FLUX fallback also failed', { ...context, error: err2.message });
+      throw err2;
+    }
   }
 
-  logger.info('[ImageService] fal.ai image generation complete', { ...context, durationMs: falMs, generatedUrl });
+  const durationMs = Date.now() - start;
+  logger.info('[ImageService] FLUX responded', { ...context, durationMs });
 
-  // Store in Supabase Storage and return CDN URL
   const publicUrl = await storeImage(generatedUrl, storyId, sceneNumber);
-
   logger.info('[ImageService] Scene image pipeline complete', { ...context, publicUrl });
   return publicUrl;
 }

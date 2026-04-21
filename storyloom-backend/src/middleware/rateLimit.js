@@ -2,19 +2,19 @@
 
 const rateLimit = require('express-rate-limit');
 
-// 60 requests per minute per user (keyed by IP; swap for user ID post-auth)
+// 200 requests per minute per user (keyed by IP)
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 60,
+  max: 200,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please slow down.' },
 });
 
-// Stricter limit for auth endpoints to prevent brute-force
+// Dev-loose auth limit: 100 attempts per 1 second (effectively unlimited)
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
+  windowMs: 1000,
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many auth attempts, please try again later.' },

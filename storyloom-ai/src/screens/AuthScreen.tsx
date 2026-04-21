@@ -6,110 +6,55 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  ActivityIndicator,
+  // ActivityIndicator replaced by DiamondLoader
   Alert,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import { useNavigation } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
 
 import { supabase } from '../services/supabase';
-import { useAuthStore } from '../store/authStore';
-import { useCreditStore } from '../store/creditStore';
-import { AuthStackParamList } from '../navigation/AuthStack';
+import { colors } from '../theme/colors';
+import Plumbob from '../components/Plumbob';
+import DiamondLoader from '../components/DiamondLoader';
+import LogoComponent from '../components/LogoComponent';
 
-type Nav = StackNavigationProp<AuthStackParamList, 'Auth'>;
-
-// Required for OAuth redirect handling in Expo Go / standalone builds
 WebBrowser.maybeCompleteAuthSession();
 
 type AuthMode = 'landing' | 'email_signin' | 'email_signup';
 
 export default function AuthScreen() {
   const { t } = useTranslation();
-  const navigation = useNavigation<Nav>();
-  const login = useAuthStore((s) => s.login);
-  const setBalance = useCreditStore((s) => s.setBalance);
 
-  const [mode, setMode] = useState<AuthMode>('landing');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [mode, setMode]               = useState<AuthMode>('landing');
+  const [email, setEmail]             = useState('');
+  const [password, setPassword]       = useState('');
   const [displayName, setDisplayName] = useState('');
   const [ageConfirmed, setAgeConfirmed] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading]         = useState(false);
 
-  // ----------------------------------------------------------
-  // Shared: after any successful sign-in, hydrate stores
-  // ----------------------------------------------------------
-  async function handleSessionEstablished(accessToken: string) {
-    const { data, error } = await supabase.auth.getUser(accessToken);
-    if (error || !data?.user) {
-      Alert.alert('Error', t('errors.generic'));
-      return;
-    }
-
-    const { data: userRow } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', data.user.id)
-      .single();
-
-    if (!userRow) {
-      Alert.alert('Error', t('errors.generic'));
-      return;
-    }
-
-    login(userRow, accessToken);
-    setBalance(userRow.credit_balance);
-
-    // First-time user → Onboarding; AppNavigator handles MainStack switch
-    const isNew = !userRow.last_active_at;
-    if (isNew) {
-      navigation.replace('Onboarding');
-    }
-  }
-
-  // ----------------------------------------------------------
-  // Google Sign-In (browser-based OAuth — works in Expo Go)
-  // ----------------------------------------------------------
   async function handleGoogleSignIn() {
     setLoading(true);
     try {
       const redirectUrl = Linking.createURL('/');
-
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: true,
-        },
+        options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
       });
-
       if (error || !data?.url) throw error ?? new Error('Could not start Google Sign-In');
-
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-
       if (result.type === 'success' && result.url) {
-        const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(result.url);
+        const { error: sessionError } = await supabase.auth.exchangeCodeForSession(result.url);
         if (sessionError) throw sessionError;
-        if (sessionData.session) {
-          await handleSessionEstablished(sessionData.session.access_token);
-        }
       }
     } catch (err: any) {
       Alert.alert('Google Sign-In failed', err.message ?? t('errors.generic'));
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
-  // ----------------------------------------------------------
-  // Apple Sign-In (iOS only)
-  // ----------------------------------------------------------
   async function handleAppleSignIn() {
     setLoading(true);
     try {
@@ -120,289 +65,354 @@ export default function AuthScreen() {
         ],
       });
       if (!credential.identityToken) throw new Error('No identity token from Apple');
-
-      const { data, error } = await supabase.auth.signInWithIdToken({
+      const { error } = await supabase.auth.signInWithIdToken({
         provider: 'apple',
         token: credential.identityToken,
       });
       if (error) throw error;
-      await handleSessionEstablished(data.session!.access_token);
     } catch (err: any) {
       if (err.code === 'ERR_REQUEST_CANCELED') return;
       Alert.alert('Apple Sign-In failed', err.message ?? t('errors.generic'));
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
-  // ----------------------------------------------------------
-  // Email Sign-In
-  // ----------------------------------------------------------
-  async function handleEmailSignIn() {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please enter your email and password.');
-      return;
-    }
+  async function handleDevLogin() {
+    const DEV_EMAIL    = 'shalevsaa1608+storyloomdev@gmail.com';
+    const DEV_PASSWORD = 'DevStoryloom!2026';
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      let { error } = await supabase.auth.signInWithPassword({
+        email: DEV_EMAIL,
+        password: DEV_PASSWORD,
+      });
       if (error) {
-        Alert.alert('Sign-In failed', 'Invalid email or password.');
-        return;
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: DEV_EMAIL,
+          password: DEV_PASSWORD,
+          options: { data: { full_name: 'Dev Tester' } },
+        });
+        if (signUpError) throw signUpError;
+        if (!signUpData.session) {
+          const { error: retryError } = await supabase.auth.signInWithPassword({
+            email: DEV_EMAIL,
+            password: DEV_PASSWORD,
+          });
+          if (retryError) throw retryError;
+        }
       }
-      await handleSessionEstablished(data.session!.access_token);
     } catch (err: any) {
-      Alert.alert('Error', err.message ?? t('errors.generic'));
+      Alert.alert(
+        'Dev login failed',
+        err?.message ??
+          'Could not sign in with dev account. If Supabase "Confirm email" is ON, turn it OFF in the dashboard.',
+      );
     } finally {
       setLoading(false);
     }
   }
 
-  // ----------------------------------------------------------
-  // Email Sign-Up
-  // ----------------------------------------------------------
+  async function handleEmailSignIn() {
+    if (!email || !password) { Alert.alert('Error', 'Please enter your email and password.'); return; }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) Alert.alert('Sign-In failed', 'Invalid email or password.');
+    } catch (err: any) {
+      Alert.alert('Error', err.message ?? t('errors.generic'));
+    } finally { setLoading(false); }
+  }
+
   async function handleEmailSignUp() {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please enter your email and password.');
-      return;
-    }
-    if (password.length < 8) {
-      Alert.alert('Error', 'Password must be at least 8 characters.');
-      return;
-    }
-    if (!ageConfirmed) {
-      Alert.alert('Age Confirmation Required', t('auth.age_confirm'));
-      return;
-    }
+    if (!email || !password) { Alert.alert('Error', 'Please fill in all fields.'); return; }
+    if (password.length < 8) { Alert.alert('Error', 'Password must be at least 8 characters.'); return; }
+    if (!ageConfirmed) { Alert.alert('Age Confirmation Required', t('auth.age_confirm')); return; }
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: { full_name: displayName || email.split('@')[0] },
-        },
+        options: { data: { full_name: displayName || email.split('@')[0] } },
       });
-      if (error) {
-        Alert.alert('Sign-Up failed', error.message);
-        return;
-      }
+      if (error) { Alert.alert('Sign-Up failed', error.message); return; }
       if (!data.session) {
-        Alert.alert(
-          'Check your email',
-          `We sent a confirmation link to ${email}. Please verify your email to continue.`
-        );
-        setMode('landing');
-        return;
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInError) {
+          Alert.alert(
+            'Sign-Up failed',
+            'Account created but auto sign-in is blocked. Disable "Confirm email" in Supabase → Authentication → Providers → Email.'
+          );
+        }
       }
-      await handleSessionEstablished(data.session.access_token);
     } catch (err: any) {
       Alert.alert('Error', err.message ?? t('errors.generic'));
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }
 
-  // ----------------------------------------------------------
-  // Render
-  // ----------------------------------------------------------
-  if (mode === 'email_signin') {
+  // ── Email forms ──────────────────────────────────────────────
+  if (mode === 'email_signin' || mode === 'email_signup') {
+    const isSignup = mode === 'email_signup';
     return (
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>{t('app.name')}</Text>
-        <Text style={styles.subtitle}>Sign in with Email</Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder={t('auth.email_placeholder')}
-          placeholderTextColor="#A0AEBA"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          autoComplete="email"
-        />
-        <TextInput
-          style={styles.input}
-          placeholder={t('auth.password_placeholder')}
-          placeholderTextColor="#A0AEBA"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoComplete="current-password"
-        />
-
-        <TouchableOpacity
-          style={[styles.button, loading && styles.disabled]}
-          onPress={handleEmailSignIn}
-          disabled={loading}
-        >
-          {loading
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.buttonText}>Sign In</Text>}
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => setMode('email_signup')} style={styles.switchLink}>
-          <Text style={styles.linkText}>No account? Create one</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setMode('landing')} style={styles.switchLink}>
-          <Text style={styles.linkText}>← Back</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    );
-  }
-
-  if (mode === 'email_signup') {
-    return (
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>{t('app.name')}</Text>
-        <Text style={styles.subtitle}>{t('auth.sign_up')}</Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Display name (optional)"
-          placeholderTextColor="#A0AEBA"
-          value={displayName}
-          onChangeText={setDisplayName}
-          autoCapitalize="words"
-        />
-        <TextInput
-          style={styles.input}
-          placeholder={t('auth.email_placeholder')}
-          placeholderTextColor="#A0AEBA"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          autoComplete="email"
-        />
-        <TextInput
-          style={styles.input}
-          placeholder={t('auth.password_placeholder')}
-          placeholderTextColor="#A0AEBA"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoComplete="new-password"
-        />
-
-        <TouchableOpacity
-          style={styles.checkRow}
-          onPress={() => setAgeConfirmed((v) => !v)}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.checkbox, ageConfirmed && styles.checkboxChecked]}>
-            {ageConfirmed && <Text style={styles.checkmark}>✓</Text>}
-          </View>
-          <Text style={styles.checkLabel}>{t('auth.age_confirm')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.button, loading && styles.disabled]}
-          onPress={handleEmailSignUp}
-          disabled={loading}
-        >
-          {loading
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.buttonText}>{t('auth.sign_up')}</Text>}
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => setMode('email_signin')} style={styles.switchLink}>
-          <Text style={styles.linkText}>Already have an account? Sign in</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setMode('landing')} style={styles.switchLink}>
-          <Text style={styles.linkText}>← Back</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    );
-  }
-
-  // Landing
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{t('app.name')}</Text>
-      <Text style={styles.tagline}>{t('app.tagline')}</Text>
-      <Text style={styles.subtitle}>{t('auth.subtitle')}</Text>
-
-      <TouchableOpacity
-        style={[styles.button, loading && styles.disabled]}
-        onPress={handleGoogleSignIn}
-        disabled={loading}
+      <KeyboardAvoidingView
+        style={styles.screen}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {loading
-          ? <ActivityIndicator color="#fff" />
-          : <Text style={styles.buttonText}>{t('auth.sign_in_google')}</Text>}
-      </TouchableOpacity>
+        <ScrollView contentContainerStyle={styles.formContainer} keyboardShouldPersistTaps="handled">
+          <TouchableOpacity onPress={() => setMode('landing')} style={styles.backBtn}>
+            <Text style={styles.backBtnText}>← Back</Text>
+          </TouchableOpacity>
 
-      {Platform.OS === 'ios' && (
+          <View style={styles.formHeader}>
+            <Plumbob size={36} color={colors.plumbob} />
+            <Text style={styles.formTitle}>{isSignup ? 'Create Account' : 'Welcome Back'}</Text>
+          </View>
+          <Text style={styles.formSubtitle}>
+            {isSignup ? 'Join StoryLoom AI — 100 free credits await' : 'Sign in to continue your story'}
+          </Text>
+
+          {isSignup && (
+            <TextInput
+              style={styles.input}
+              placeholder="Display name (optional)"
+              placeholderTextColor={colors.textMuted}
+              value={displayName}
+              onChangeText={setDisplayName}
+              autoCapitalize="words"
+            />
+          )}
+          <TextInput
+            style={styles.input}
+            placeholder="Email address"
+            placeholderTextColor={colors.textMuted}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor={colors.textMuted}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+
+          {isSignup && (
+            <TouchableOpacity style={styles.checkRow} onPress={() => setAgeConfirmed((v) => !v)}>
+              <View style={[styles.checkbox, ageConfirmed && styles.checkboxChecked]}>
+                {ageConfirmed && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+              <Text style={styles.checkLabel}>{t('auth.age_confirm')}</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={[styles.primaryBtn, loading && styles.btnDisabled]}
+            onPress={isSignup ? handleEmailSignUp : handleEmailSignIn}
+            disabled={loading}
+          >
+            {loading
+              ? <DiamondLoader size={22} animated showSparkles={false} />
+              : <Text style={styles.primaryBtnText}>{isSignup ? 'Create Account' : 'Sign In'}</Text>}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setMode(isSignup ? 'email_signin' : 'email_signup')}
+            style={styles.switchLink}
+          >
+            <Text style={styles.switchLinkText}>
+              {isSignup ? 'Already have an account? Sign in' : 'No account? Create one'}
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // ── Landing ──────────────────────────────────────────────────
+  return (
+    <View style={styles.screen}>
+      {/* Background glows */}
+      <View style={styles.blob1} />
+      <View style={styles.blob2} />
+
+      {/* Logo area */}
+      <View style={styles.logoArea}>
+        <LogoComponent size="large" showWordmark animated />
+        <Text style={styles.tagline}>Your story. Your face. Infinite possibilities.</Text>
+      </View>
+
+      {/* Auth panel */}
+      <View style={styles.authPanel}>
+        {/* Google */}
         <TouchableOpacity
-          style={[styles.button, styles.appleButton, loading && styles.disabled]}
-          onPress={handleAppleSignIn}
+          style={[styles.primaryBtn, loading && styles.btnDisabled]}
+          onPress={handleGoogleSignIn}
           disabled={loading}
         >
-          <Text style={[styles.buttonText]}>{t('auth.sign_in_apple')}</Text>
+          {loading
+            ? <DiamondLoader size={22} animated showSparkles={false} />
+            : <Text style={styles.primaryBtnText}>🔍  Continue with Google</Text>}
         </TouchableOpacity>
-      )}
 
-      <TouchableOpacity style={styles.switchLink} onPress={() => setMode('email_signin')} disabled={loading}>
-        <Text style={styles.linkText}>{t('auth.sign_in_email')}</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.switchLink} onPress={() => setMode('email_signup')} disabled={loading}>
-        <Text style={styles.linkText}>{t('auth.sign_up')}</Text>
-      </TouchableOpacity>
+        {Platform.OS === 'ios' && (
+          <TouchableOpacity
+            style={[styles.secondaryBtn, loading && styles.btnDisabled]}
+            onPress={handleAppleSignIn}
+            disabled={loading}
+          >
+            <Text style={styles.secondaryBtnText}>  Continue with Apple</Text>
+          </TouchableOpacity>
+        )}
+
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>or</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <TouchableOpacity style={styles.ghostBtn} onPress={() => setMode('email_signin')} disabled={loading}>
+          <Text style={styles.ghostBtnText}>✉️  Sign in with Email</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => setMode('email_signup')} disabled={loading}>
+          <Text style={styles.signupLink}>
+            New here? <Text style={styles.signupLinkBold}>Create a free account ✨</Text>
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.devBtn, loading && styles.btnDisabled]}
+          onPress={handleDevLogin}
+          disabled={loading}
+          activeOpacity={0.75}
+        >
+          <Text style={styles.devBtnText}>🧪  DEV LOGIN (bypass)</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: '#FAFAFA',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 40,
+  screen: { flex: 1, backgroundColor: colors.bg },
+
+  blob1: {
+    position: 'absolute', top: -100, right: -80,
+    width: 300, height: 300, borderRadius: 150,
+    backgroundColor: colors.plumbobGlow,
   },
-  title: { fontSize: 32, fontWeight: '700', color: '#2E4057', marginBottom: 4 },
-  tagline: { fontSize: 13, color: '#048A81', marginBottom: 8, textAlign: 'center' },
-  subtitle: { fontSize: 16, color: '#6B7C93', marginBottom: 48, textAlign: 'center' },
+  blob2: {
+    position: 'absolute', bottom: 200, left: -60,
+    width: 220, height: 220, borderRadius: 110,
+    backgroundColor: colors.tealGlow,
+  },
+
+  // Logo
+  logoArea: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingTop: 60,
+  },
+  logoTextRow: { flexDirection: 'row', gap: 0, marginTop: 16 },
+  appNameStory: {
+    fontSize: 30, fontWeight: '900',
+    color: colors.textPrimary, letterSpacing: 7,
+  },
+  appNameLoom: {
+    fontSize: 30, fontWeight: '900',
+    color: colors.plumbob, letterSpacing: 7,
+  },
+  greenDivider: { width: 60, height: 2, backgroundColor: colors.plumbob, marginVertical: 8 },
+  aiLabel: {
+    fontSize: 11, fontWeight: '800',
+    color: colors.plumbob, letterSpacing: 6, marginBottom: 12,
+  },
+  tagline: {
+    fontSize: 12, color: colors.textSecondary,
+    letterSpacing: 0.3, textAlign: 'center', paddingHorizontal: 40,
+  },
+
+  // Auth panel (bottom sheet)
+  authPanel: {
+    backgroundColor: colors.bgSurface,
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingHorizontal: 26, paddingTop: 26, paddingBottom: 44,
+    borderTopWidth: 1, borderTopColor: colors.plumbobBorder,
+    gap: 11,
+  },
+
+  primaryBtn: {
+    backgroundColor: colors.plumbob,
+    borderRadius: 16, paddingVertical: 16,
+    alignItems: 'center',
+    shadowColor: colors.plumbob,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  primaryBtnText: { color: colors.bg, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+  secondaryBtn: {
+    backgroundColor: 'transparent',
+    borderRadius: 16, paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1.5, borderColor: colors.border,
+  },
+  secondaryBtnText: { color: colors.textPrimary, fontSize: 16, fontWeight: '600' },
+  ghostBtn: {
+    borderRadius: 16, paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1, borderColor: colors.plumbobBorder,
+  },
+  ghostBtnText: { color: colors.plumbob, fontSize: 15, fontWeight: '700' },
+  btnDisabled: { opacity: 0.45 },
+
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 2 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerText: { color: colors.textMuted, fontSize: 13 },
+
+  signupLink: { color: colors.textSecondary, fontSize: 13, textAlign: 'center', paddingTop: 2 },
+  signupLinkBold: { color: colors.plumbob, fontWeight: '700' },
+
+  devBtn: {
+    marginTop: 8,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.45)',
+    backgroundColor: 'rgba(245, 158, 11, 0.10)',
+  },
+  devBtnText: { color: colors.credit, fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+
+  // Email forms
+  formContainer: {
+    flexGrow: 1, paddingHorizontal: 26,
+    paddingTop: 80, paddingBottom: 48, gap: 13,
+  },
+  backBtn: { marginBottom: 6 },
+  backBtnText: { color: colors.textSecondary, fontSize: 15 },
+  formHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 2 },
+  formTitle: {
+    fontSize: 28, fontWeight: '900',
+    color: colors.textPrimary, letterSpacing: -0.3,
+  },
+  formSubtitle: { fontSize: 14, color: colors.textSecondary, marginBottom: 6 },
   input: {
-    width: '100%',
-    borderWidth: 1.5,
-    borderColor: '#F0F4F8',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: '#2E4057',
-    backgroundColor: '#fff',
-    marginBottom: 12,
+    backgroundColor: colors.bgCard,
+    borderWidth: 1, borderColor: colors.border,
+    borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14,
+    fontSize: 15, color: colors.textPrimary,
   },
-  button: {
-    width: '100%',
-    backgroundColor: '#048A81',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  appleButton: { backgroundColor: '#2E4057' },
-  disabled: { opacity: 0.6 },
-  switchLink: { paddingVertical: 8 },
-  linkText: { color: '#048A81', fontSize: 14, textDecorationLine: 'underline' },
-  checkRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, width: '100%' },
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#048A81',
-    marginRight: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 22, height: 22, borderRadius: 6,
+    borderWidth: 2, borderColor: colors.plumbob,
+    alignItems: 'center', justifyContent: 'center',
   },
-  checkboxChecked: { backgroundColor: '#048A81' },
-  checkmark: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  checkLabel: { flex: 1, fontSize: 14, color: '#2E4057' },
+  checkboxChecked: { backgroundColor: colors.plumbob },
+  checkmark: { color: colors.bg, fontSize: 13, fontWeight: '700' },
+  checkLabel: { flex: 1, fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
+  switchLink: { alignItems: 'center', paddingVertical: 4 },
+  switchLinkText: { color: colors.textMuted, fontSize: 13, textDecorationLine: 'underline' },
 });

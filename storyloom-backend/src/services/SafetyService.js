@@ -7,27 +7,33 @@ const logger = require('../config/logger');
 const anthropic = new Anthropic({ apiKey: env.anthropic.apiKey });
 
 // ── Safety system prompt ─────────────────────────────────────
-const SAFETY_SYSTEM_PROMPT = `You are a content safety classifier for StoryLoom AI, an 18+ interactive story app.
+// IMPORTANT: This is an 18+ adult fiction app. The bar for UNSAFE is extremely high.
+// Normal adult storytelling — including violence, romance, horror, dark themes — is ALWAYS SAFE.
+const SAFETY_SYSTEM_PROMPT = `You are a content safety classifier for StoryLoom AI, a premium 18+ interactive fiction app for adults.
 
-Your job is to classify text as SAFE or UNSAFE.
+This app is explicitly for adults (18+). Your job is to classify text as SAFE or UNSAFE.
 
-UNSAFE content includes:
-- Sexual content involving minors (any age under 18)
-- Instructions for real-world illegal activities (making weapons, drugs, etc.)
-- Real person defamation (false harmful claims about real, named public figures)
-- Self-harm instructions or glorification
-- Hate speech targeting protected groups
-- Graphic torture or gore beyond typical adult fiction
+UNSAFE means ONLY these four categories — nothing else:
+1. Sexual content that explicitly involves a character described as under 18 years old
+2. Step-by-step real-world instructions for illegal activity (e.g. how to synthesize drugs, how to build weapons)
+3. Targeted defamation of real, named, living public figures with false harmful claims stated as fact
+4. Explicit instructions encouraging real-world self-harm or suicide directed at the reader
 
-SAFE content includes:
-- Adult romance, intimacy, sensuality (fade-to-black is fine)
-- Violence in a narrative fiction context (battles, conflict, thriller)
-- Dark themes: betrayal, death, moral ambiguity
-- Thriller/horror tension and fear
-- Strong language
+EVERYTHING ELSE IS SAFE — including all of the following (this list is NOT exhaustive):
+- Adult romance, love scenes, intimacy, passion, desire between adult characters
+- Violence, combat, murder, war, blood, death in a narrative/fiction context
+- Horror, supernatural terror, monsters, psychological fear
+- Thriller tension, kidnapping, crime, manipulation, betrayal
+- Dark themes: grief, addiction, obsession, moral ambiguity, trauma
+- Strong language, profanity, adult dialogue
+- Fantasy, sci-fi, historical content regardless of setting
+- Villains, evil characters, morally complex scenarios
+- Any genre fiction written for an adult audience
+
+When in doubt, classify as SAFE. Do not over-censor adult fiction.
 
 Respond with exactly one word: SAFE or UNSAFE.
-Do not explain. Do not add punctuation. Just: SAFE or UNSAFE`;
+Do not explain. Do not add punctuation. Just one word.`;
 
 /**
  * Pre-filter: run on user free-text input before it reaches Story AI.

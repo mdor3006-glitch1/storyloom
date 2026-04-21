@@ -12,18 +12,24 @@ import { useAuthStore } from '../store/authStore';
  * - Exposes `refresh()` for screens that need an immediate server sync
  *   (e.g. after a story is started or a purchase completes).
  */
+const BALANCE_THROTTLE_MS = 30_000; // auto-syncs at most once per 30s
+
 export function useCredits() {
   const store         = useCreditStore();
   const isLoggedIn    = useAuthStore((s) => !!s.sessionToken);
   const fetchingRef   = useRef(false);
+  const lastSyncRef   = useRef<number>(0);
 
-  // ── Fetch balance from server ──────────────────────────────��
-  const syncBalance = useCallback(async () => {
+  // ── Fetch balance from server ─────────────────────────────────
+  // force=true bypasses the throttle (used by explicit refresh() calls)
+  const syncBalance = useCallback(async (force = false) => {
     if (!isLoggedIn || fetchingRef.current) return;
+    if (!force && Date.now() - lastSyncRef.current < BALANCE_THROTTLE_MS) return;
     fetchingRef.current = true;
     try {
       const { data } = await api.get<{ balance: number }>('/credits/balance');
       store.setBalance(data.balance);
+      lastSyncRef.current = Date.now();
     } catch {
       // Silently fail — the cached store value is still shown
     } finally {
@@ -42,9 +48,9 @@ export function useCredits() {
     }
   }, [isLoggedIn, store]);
 
-  // ── Full refresh (balance + history) ────────────────────────
+  // ── Full refresh (balance + history) — bypasses throttle ────
   const refresh = useCallback(() => {
-    return Promise.all([syncBalance(), syncHistory()]);
+    return Promise.all([syncBalance(true), syncHistory()]);
   }, [syncBalance, syncHistory]);
 
   // ── Sync on mount ────────────────────────────────────────────
