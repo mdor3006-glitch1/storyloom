@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS public.stories (
   setting               text NOT NULL,
   tone                  text NOT NULL,
   art_style             text NOT NULL,
-  total_scenes          integer NOT NULL CHECK (total_scenes IN (8, 15, 25, 30, 35, 40)),
+  total_scenes          integer NOT NULL,
   current_scene_number  integer NOT NULL DEFAULT 0,
   status                text NOT NULL DEFAULT 'active'
                           CHECK (status IN ('active', 'completed', 'abandoned')),

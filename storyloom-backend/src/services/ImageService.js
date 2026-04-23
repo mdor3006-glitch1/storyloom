@@ -13,7 +13,7 @@ const KONTEXT_PRO      = 'fal-ai/flux-pro/kontext';
 const SCHNELL          = 'fal-ai/flux/schnell';
 
 // STAGE v2 hard timeout per FLUX call
-const FLUX_TIMEOUT_MS = 12_000;
+const FLUX_TIMEOUT_MS = 45_000;
 
 function withTimeout(promise, ms, label) {
   let timer;

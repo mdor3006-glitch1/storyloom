@@ -20,6 +20,11 @@ async function requireAuth(req, res, next) {
   // Validate the JWT via Supabase Auth (handles expiry, signature, revocation)
   const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token);
   if (authError || !authData?.user) {
+    const isNetworkError = authError && (!authError.status || authError.message?.includes('fetch'));
+    if (isNetworkError) {
+      logger.warn('[auth] Supabase unreachable during token verification', { method: req.method, path: req.path, error: authError.message });
+      return res.status(503).json({ error: 'Authentication service temporarily unavailable' });
+    }
     logger.warn('[auth] Invalid or expired token', { method: req.method, path: req.path, error: authError?.message });
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
