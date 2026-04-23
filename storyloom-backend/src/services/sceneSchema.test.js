@@ -74,11 +74,11 @@ test('rejects invalid scene_type', () => {
   assert.ok(r.errors.some(e => e.includes('scene_type')));
 });
 
-test('rejects can_text_input mismatch with scene_type', () => {
-  const s = validSceneB(); s.can_text_input = true;
+test('auto-fixes can_text_input mismatch with scene_type', () => {
+  const s = validSceneB(); s.can_text_input = true; // wrong for type B
   const r = validateScene(s, { sceneNumber: 2, isFinalScene: false });
-  assert.strictEqual(r.valid, false);
-  assert.ok(r.errors.some(e => e.includes('can_text_input')));
+  assert.strictEqual(r.valid, true);
+  assert.strictEqual(s.can_text_input, false); // coerced back to match type B
 });
 
 test('requires filler_dialogue on non-final scenes', () => {
@@ -98,26 +98,76 @@ test('does not require filler on final scenes', () => {
   assert.strictEqual(r.valid, true, `got: ${r.errors?.join(', ')}`);
 });
 
-test('rejects invalid emotion tag', () => {
+test('coerces unknown emotion to neutral', () => {
   const s = validSceneB();
   s.dialogue[0].emotion = 'sus';
   const r = validateScene(s, { sceneNumber: 2, isFinalScene: false });
-  assert.strictEqual(r.valid, false);
+  assert.strictEqual(r.valid, true);
+  assert.strictEqual(s.dialogue[0].emotion, 'neutral');
 });
 
-test('rejects beat_ms outside 200..4000', () => {
+test('aliases creative emotions to whitelist (reflective -> neutral)', () => {
+  const s = validSceneB();
+  s.filler_dialogue[2].emotion = 'reflective';
+  const r = validateScene(s, { sceneNumber: 2, isFinalScene: false });
+  assert.strictEqual(r.valid, true, `got: ${r.errors?.join(', ')}`);
+  assert.strictEqual(s.filler_dialogue[2].emotion, 'neutral');
+});
+
+test('aliases anxious -> tense', () => {
+  const s = validSceneB();
+  s.filler_dialogue[0].emotion = 'anxious';
+  const r = validateScene(s, { sceneNumber: 2, isFinalScene: false });
+  assert.strictEqual(r.valid, true);
+  assert.strictEqual(s.filler_dialogue[0].emotion, 'tense');
+});
+
+test('clamps beat_ms outside 200..4000 instead of rejecting', () => {
   const s = validSceneB();
   s.filler_dialogue[0].beat_ms = 50;
   const r = validateScene(s, { sceneNumber: 2, isFinalScene: false });
-  assert.strictEqual(r.valid, false);
+  assert.strictEqual(r.valid, true);
+  assert.strictEqual(s.filler_dialogue[0].beat_ms, 200);
 });
 
-test('detects spoiler leak from choice tokens in filler', () => {
+test('soft-coerces unknown time_of_day to null', () => {
   const s = validSceneB();
-  s.filler_dialogue[0].line = 'The highway is faster.';
+  s.time_of_day = 'twilight';
+  const r = validateScene(s, { sceneNumber: 2, isFinalScene: false });
+  assert.strictEqual(r.valid, true);
+  assert.strictEqual(s.time_of_day, null);
+});
+
+test('detects spoiler with 2+ distinctive tokens from same choice', () => {
+  const s = validSceneB();
+  s.filler_dialogue[0].line = 'The highway exit is close.';
   const r = detectSpoilers(s);
   assert.strictEqual(r.clean, false);
-  assert.ok(r.offending[0].tokens.includes('highway'));
+  assert.strictEqual(r.offending[0].reason, 'multi_overlap');
+});
+
+test('detects spoiler with 3-word phrase match', () => {
+  const s = validSceneB();
+  s.choices = ['We take the highway exit', 'Cut through the alleyway'];
+  s.filler_dialogue[0].line = "Okay, take the highway right now.";
+  const r = detectSpoilers(s);
+  assert.strictEqual(r.clean, false);
+  assert.strictEqual(r.offending[0].reason, 'phrase_match');
+});
+
+test('does NOT flag single common-word overlap (everything)', () => {
+  const s = validSceneB();
+  s.choices = ['Tell her everything now', 'Keep the secret'];
+  s.filler_dialogue[0].line = "I can't believe everything.";
+  const r = detectSpoilers(s);
+  assert.strictEqual(r.clean, true);
+});
+
+test('does NOT flag single content-word overlap (highway)', () => {
+  const s = validSceneB();
+  s.filler_dialogue[0].line = 'The highway is far away.';
+  const r = detectSpoilers(s);
+  assert.strictEqual(r.clean, true);
 });
 
 test('passes clean branch-agnostic filler', () => {

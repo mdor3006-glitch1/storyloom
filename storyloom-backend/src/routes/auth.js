@@ -1,7 +1,6 @@
 'use strict';
 
 const { Router } = require('express');
-const { authLimiter } = require('../middleware/rateLimit');
 const { requireAuth } = require('../middleware/auth');
 const { supabaseAdmin } = require('../config/supabase');
 const logger = require('../config/logger');
@@ -14,7 +13,7 @@ const router = Router();
 //   - logging the 100-credit signup bonus
 // Google / Apple sign-ins are handled client-side via Supabase SDK
 // and don't need a backend signup endpoint.
-router.post('/signup', authLimiter, async (req, res, next) => {
+router.post('/signup', async (req, res, next) => {
   try {
     const { email, password, display_name } = req.body;
 
@@ -64,7 +63,7 @@ router.post('/signup', authLimiter, async (req, res, next) => {
 // Email + password login. Returns a session (access_token + refresh_token).
 // Google / Apple sessions are issued client-side and only the JWT is sent to
 // this backend — no separate login endpoint is needed for those providers.
-router.post('/login', authLimiter, async (req, res, next) => {
+router.post('/login', async (req, res, next) => {
   try {
     const { email, password } = req.body;
 

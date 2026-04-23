@@ -8,7 +8,6 @@ const morgan = require('morgan');
 
 const env = require('./config/env');
 const logger = require('./config/logger');
-const { apiLimiter } = require('./middleware/rateLimit');
 const errorHandler = require('./middleware/errorHandler');
 
 const authRoutes = require('./routes/auth');
@@ -39,9 +38,6 @@ app.use(morgan(morganFormat, {
 // Note: /credits/webhook uses express.raw() inside the route — must come BEFORE this
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: false }));
-
-// ---- Rate limiting (global) -------------------------------
-app.use(apiLimiter);
 
 // ---- Health check -----------------------------------------
 app.get('/health', (_req, res) => {

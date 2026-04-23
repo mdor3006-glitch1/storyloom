@@ -25,7 +25,7 @@ type Route = RouteProp<StoryStackParamList, 'Scene'>;
 
 // ── Tunables ──────────────────────────────────────────────────
 const IMAGE_POLL_INTERVAL = 3000;
-const IMAGE_POLL_MAX      = 10;
+const IMAGE_POLL_MAX      = 20;
 const TYPEWRITER_MS       = 35;
 const BUBBLE_PAUSE_MS     = 400;
 const CHOICE_REVEAL_AT    = 3;
@@ -411,14 +411,25 @@ export default function SceneScreen() {
 
   // ── Poll for image when scene has no URL ──────────────────
   useEffect(() => {
-    if (!scene || scene.image_url || pollCount.current >= IMAGE_POLL_MAX) return;
+    if (!scene) return;
+    // Reset the budget every time the displayed scene id changes — otherwise
+    // a single exhausted run would permanently disable image polling for the
+    // rest of the story.
+    pollCount.current = 0;
+    if (scene.image_url) return;
+    const targetSceneId = scene.id;
     pollRef.current = setInterval(async () => {
       pollCount.current++;
       if (pollCount.current >= IMAGE_POLL_MAX) { clearInterval(pollRef.current!); return; }
       try {
         const { data } = await api.get(`/stories/${storyId}/scenes-current`);
-        if (data?.scene?.image_url) {
-          setScene(prev => prev ? { ...prev, image_url: data.scene.image_url } : prev);
+        // Validate the returned row matches the scene we're actually displaying —
+        // /scenes-current returns the newest row, which could race with an undo
+        // or a concurrent pregen write and hand us the wrong image.
+        if (data?.scene?.id === targetSceneId && data.scene.image_url) {
+          setScene(prev => (prev && prev.id === targetSceneId
+            ? { ...prev, image_url: data.scene.image_url }
+            : prev));
           clearInterval(pollRef.current!);
         }
       } catch { /* ignore */ }
@@ -745,7 +756,7 @@ export default function SceneScreen() {
 
   // Poll for nextScene image if not present yet (bundle miss)
   async function pollForNextImage(sceneId: string) {
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 20; i++) {
       if (!isMountedRef.current) return;
       await sleep(2500);
       try {

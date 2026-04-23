@@ -81,30 +81,16 @@ export default function AuthScreen() {
     const DEV_PASSWORD = 'DevStoryloom!2026';
     setLoading(true);
     try {
-      let { error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: DEV_EMAIL,
         password: DEV_PASSWORD,
       });
-      if (error) {
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: DEV_EMAIL,
-          password: DEV_PASSWORD,
-          options: { data: { full_name: 'Dev Tester' } },
-        });
-        if (signUpError) throw signUpError;
-        if (!signUpData.session) {
-          const { error: retryError } = await supabase.auth.signInWithPassword({
-            email: DEV_EMAIL,
-            password: DEV_PASSWORD,
-          });
-          if (retryError) throw retryError;
-        }
-      }
+      if (error) throw error;
     } catch (err: any) {
       Alert.alert(
         'Dev login failed',
         err?.message ??
-          'Could not sign in with dev account. If Supabase "Confirm email" is ON, turn it OFF in the dashboard.',
+          'Dev user not found. Create it in Supabase → Authentication → Users (Auto Confirm ON).',
       );
     } finally {
       setLoading(false);

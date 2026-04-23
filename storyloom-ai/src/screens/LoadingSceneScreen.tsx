@@ -100,25 +100,26 @@ export default function LoadingSceneScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    let delayTimer: ReturnType<typeof setTimeout> | null = null;
     const startTime = Date.now();
     const isFirstScene = reason === 'first_scene' || (!playerChoice && !playerTextInput);
 
     async function tryWarmBundle(): Promise<boolean> {
       if (!isFirstScene) return false;
-      // Try up to 4 times over ~5 seconds for the warm bundle to arrive
-      for (let i = 0; i < 4; i++) {
+      // Poll up to 8 times over ~12 seconds — warm pregen typically takes 8–12 s
+      // (Claude 3–6 s + FLUX 5–10 s). Better to wait than fire a redundant live gen.
+      for (let i = 0; i < 8; i++) {
         if (cancelled) return false;
         try {
           const { data } = await api.get(`/stories/${storyId}/warm-scene-1`);
           if (data?.ready && data?.bundle) {
-            // Fire the POST /scenes to persist the scene row (server sees warm bundle and consumes it).
             const resp = await api.post(`/stories/${storyId}/scenes`, {});
             if (cancelled) return false;
             finish(resp.data);
             return true;
           }
         } catch { /* ignore */ }
-        await new Promise(r => setTimeout(r, 1200));
+        await new Promise(r => setTimeout(r, 1500));
       }
       return false;
     }
@@ -145,9 +146,8 @@ export default function LoadingSceneScreen() {
 
     async function generate() {
       try {
-        // Warm start fast-path
         const warmed = await tryWarmBundle();
-        if (warmed) return;
+        if (warmed || cancelled) return;
 
         const body: Record<string, string> = {};
         if (playerChoice)    body.player_choice      = playerChoice;
@@ -159,16 +159,27 @@ export default function LoadingSceneScreen() {
       } catch (err: any) {
         if (cancelled) return;
         if (retryCount < 2) {
+          // Single retry trigger: bump retryCount. The effect re-runs (after
+          // the cleanup below aborts this pass), and schedules the retry with
+          // a 1 s delay — no parallel setTimeout fire.
           setRetryCount(r => r + 1);
-          setTimeout(() => generate(), 1000);
         } else {
           setErrorMsg(err?.response?.data?.error ?? 'Something went wrong. Your credits were not spent.');
         }
       }
     }
 
-    generate();
-    return () => { cancelled = true; };
+    // First run: immediate. Subsequent runs (retries): 1 s delay before firing.
+    if (retryCount === 0) {
+      generate();
+    } else {
+      delayTimer = setTimeout(generate, 1000);
+    }
+
+    return () => {
+      cancelled = true;
+      if (delayTimer) clearTimeout(delayTimer);
+    };
   }, [retryCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const spin = plumbobRot.interpolate({ inputRange: [0,1], outputRange: ['0deg','360deg'] });

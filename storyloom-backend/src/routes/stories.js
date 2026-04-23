@@ -375,7 +375,34 @@ router.post('/:id/scenes', requireAuth, async (req, res, next) => {
 
     // ── Step 6: Insert scene + update story ───────────────────
     const { error: insertErr } = await supabaseAdmin.from('scenes').insert(sceneRow);
-    if (insertErr) throw insertErr;
+    if (insertErr) {
+      // Duplicate-key race: another concurrent request already inserted this
+      // scene_number. Fetch and return the existing row instead of 500'ing.
+      // PG error 23505 = unique_violation.
+      if (insertErr.code === '23505') {
+        logger.warn('[scenes] Duplicate insert detected — returning existing scene', {
+          storyId, sceneNumber, userId,
+        });
+        const { data: existing } = await supabaseAdmin
+          .from('scenes').select('*')
+          .eq('story_id', storyId)
+          .eq('scene_number', sceneNumber)
+          .eq('is_undo_snapshot', false)
+          .maybeSingle();
+        if (existing) {
+          clearTimeout(timeoutId);
+          if (!res.headersSent) {
+            return res.status(201).json({
+              scene: existing,
+              is_final_scene: existing.scene_number >= (story.total_scenes ?? 0),
+              deduped: true,
+            });
+          }
+          return;
+        }
+      }
+      throw insertErr;
+    }
 
     const newStatus = sceneData.is_final_scene ? 'completed' : 'active';
     // Freeform cooldown logic: if this was freeform, set cooldown = 2. Otherwise decrement.
