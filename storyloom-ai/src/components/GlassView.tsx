@@ -1,33 +1,43 @@
 import React from 'react';
-import { Platform, View, ViewStyle } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { View, ViewStyle } from 'react-native';
+
+let LiquidGlassView: React.ComponentType<any> | null = null;
+let isLiquidGlassSupported = false;
+
+try {
+  const lib = require('@callstack/liquid-glass');
+  LiquidGlassView = lib.LiquidGlassView;
+  isLiquidGlassSupported = lib.isLiquidGlassSupported ?? false;
+} catch {}
 
 interface GlassViewProps {
   intensity?: number;
-  tint?: 'dark' | 'light' | 'default';
+  tint?: string;
   style?: ViewStyle;
   children?: React.ReactNode;
   androidFallbackColor?: string;
 }
 
 export default function GlassView({
-  intensity = 60,
-  tint = 'dark',
   style,
   children,
   androidFallbackColor = 'rgba(0,0,0,0.55)',
 }: GlassViewProps) {
-  if (Platform.OS === 'android') {
+  if (isLiquidGlassSupported && LiquidGlassView) {
     return (
-      <View style={[style, { backgroundColor: androidFallbackColor }]}>
+      <LiquidGlassView
+        effect="regular"
+        colorScheme="dark"
+        style={[style, { overflow: 'hidden' }]}
+      >
         {children}
-      </View>
+      </LiquidGlassView>
     );
   }
 
   return (
-    <BlurView intensity={intensity} tint={tint} style={[{ overflow: 'hidden' }, style]}>
+    <View style={[style, { backgroundColor: androidFallbackColor }]}>
       {children}
-    </BlurView>
+    </View>
   );
 }
