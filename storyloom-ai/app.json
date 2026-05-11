@@ -32,9 +32,11 @@
       "package": "com.storyloom.ai",
       "versionCode": 1,
       "permissions": [
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "CAMERA"
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "web": {
@@ -60,16 +62,14 @@
       "en": "./src/assets/store/en-metadata.json",
       "he": "./src/assets/store/he-metadata.json"
     },
-    "extra": {
-      "eas": {
-        "projectId": "your-eas-project-id"
-      }
-    },
     "runtimeVersion": {
       "policy": "appVersion"
     },
-    "updates": {
-      "url": "https://u.expo.dev/your-eas-project-id"
-    }
+    "extra": {
+      "eas": {
+        "projectId": "d877582d-9e96-43b7-bd40-f5858532c915"
+      }
+    },
+    "owner": "328492699"
   }
 }
