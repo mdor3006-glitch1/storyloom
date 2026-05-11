@@ -343,10 +343,10 @@ const styles = StyleSheet.create({
   creditBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: colors.bgCard, borderRadius: 20,
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderWidth: 1.5, borderColor: colors.plumbobBorder,
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderWidth: 0.5, borderColor: colors.plumbobBorder,
     shadowColor: colors.plumbob, shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15, shadowRadius: 6, elevation: 3,
+    shadowOpacity: 0.20, shadowRadius: 8, elevation: 3,
   },
   creditBadgeRed: { borderColor: '#EF444440' },
   creditDiamond:  { fontSize: 12, color: colors.plumbob },
@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
   heroName:  { fontSize: 22, fontWeight: '900', color: colors.textPrimary, letterSpacing: -0.4 },
 
   streakBadge: {
-    borderRadius: 20, borderWidth: 1.5,
+    borderRadius: 20, borderWidth: 0.5,
     paddingHorizontal: 12, paddingVertical: 6,
   },
   streakText: { fontSize: 12, fontWeight: '700' },
@@ -370,13 +370,13 @@ const styles = StyleSheet.create({
   // Sections
   section:       { marginBottom: 24 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 12 },
-  sectionLabel:  { fontSize: 10, fontWeight: '800', color: colors.plumbob, letterSpacing: 2.5, paddingHorizontal: 20, marginBottom: 12 },
+  sectionLabel:  { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.35)', letterSpacing: 0.7, paddingHorizontal: 20, marginBottom: 12 },
   sectionSeeAll: { fontSize: 12, color: colors.plumbob, fontWeight: '600' },
 
   // Story card
   storyCard: {
-    backgroundColor: colors.bgCard, borderRadius: 16,
-    overflow: 'hidden', borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.bgCard, borderRadius: 14,
+    overflow: 'hidden', borderWidth: 0.5, borderColor: colors.border,
     shadowColor: colors.shadow, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 1, shadowRadius: 12, elevation: 4,
   },
@@ -406,15 +406,16 @@ const styles = StyleSheet.create({
 
   cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardDate:   { fontSize: 10, color: colors.textMuted },
-  continueBadge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
+  continueBadge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   continueBadgeText: { fontSize: 11, fontWeight: '700', color: '#fff' },
 
   // CTA
   ctaSection: { paddingHorizontal: 20, marginBottom: 16, alignItems: 'center' },
   ctaBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: colors.plumbob,
-    borderRadius: 20, paddingVertical: 17, paddingHorizontal: 32,
+    backgroundColor: 'rgba(127,119,221,0.80)',
+    borderRadius: 999, paddingVertical: 17, paddingHorizontal: 32,
+    borderWidth: 0.5, borderColor: 'rgba(127,119,221,0.90)',
     shadowColor: colors.plumbob, shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4, shadowRadius: 14, elevation: 8,
   },
@@ -434,7 +435,7 @@ const styles = StyleSheet.create({
   streakMotivation: {
     marginHorizontal: 20, marginTop: 8,
     backgroundColor: colors.bgCard, borderRadius: 14, padding: 16,
-    borderWidth: 1, borderColor: colors.border,
+    borderWidth: 0.5, borderColor: colors.border,
     alignItems: 'center',
   },
   streakMotivText: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', lineHeight: 19 },

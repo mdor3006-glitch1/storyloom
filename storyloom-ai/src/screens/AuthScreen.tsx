@@ -286,12 +286,12 @@ const styles = StyleSheet.create({
   blob1: {
     position: 'absolute', top: -100, right: -80,
     width: 300, height: 300, borderRadius: 150,
-    backgroundColor: colors.plumbobGlow,
+    backgroundColor: 'rgba(58,45,140,0.70)',
   },
   blob2: {
     position: 'absolute', bottom: 200, left: -60,
     width: 220, height: 220, borderRadius: 110,
-    backgroundColor: colors.tealGlow,
+    backgroundColor: 'rgba(107,32,96,0.70)',
   },
 
   // Logo
@@ -320,37 +320,38 @@ const styles = StyleSheet.create({
 
   // Auth panel (bottom sheet)
   authPanel: {
-    backgroundColor: colors.bgSurface,
+    backgroundColor: colors.bgCard,
     borderTopLeftRadius: 28, borderTopRightRadius: 28,
     paddingHorizontal: 26, paddingTop: 26, paddingBottom: 44,
-    borderTopWidth: 1, borderTopColor: colors.plumbobBorder,
+    borderTopWidth: 0.5, borderTopColor: colors.border,
     gap: 11,
   },
 
   primaryBtn: {
-    backgroundColor: colors.plumbob,
-    borderRadius: 16, paddingVertical: 16,
+    backgroundColor: 'rgba(127,119,221,0.80)',
+    borderRadius: 999, paddingVertical: 16,
     alignItems: 'center',
+    borderWidth: 0.5, borderColor: 'rgba(127,119,221,0.90)',
     shadowColor: colors.plumbob,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.35,
     shadowRadius: 8,
     elevation: 5,
   },
-  primaryBtnText: { color: colors.bg, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+  primaryBtnText: { color: '#ffffff', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
   secondaryBtn: {
     backgroundColor: 'transparent',
-    borderRadius: 16, paddingVertical: 16,
+    borderRadius: 8, paddingVertical: 16,
     alignItems: 'center',
-    borderWidth: 1.5, borderColor: colors.border,
+    borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.18)',
   },
-  secondaryBtnText: { color: colors.textPrimary, fontSize: 16, fontWeight: '600' },
+  secondaryBtnText: { color: 'rgba(255,255,255,0.50)', fontSize: 16, fontWeight: '600' },
   ghostBtn: {
-    borderRadius: 16, paddingVertical: 14,
+    borderRadius: 8, paddingVertical: 14,
     alignItems: 'center',
-    borderWidth: 1, borderColor: colors.plumbobBorder,
+    borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.18)',
   },
-  ghostBtnText: { color: colors.plumbob, fontSize: 15, fontWeight: '700' },
+  ghostBtnText: { color: 'rgba(255,255,255,0.50)', fontSize: 15, fontWeight: '600' },
   btnDisabled: { opacity: 0.45 },
 
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 2 },
@@ -365,7 +366,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
     alignItems: 'center',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: 'rgba(245, 158, 11, 0.45)',
     backgroundColor: 'rgba(245, 158, 11, 0.10)',
   },
@@ -386,14 +387,19 @@ const styles = StyleSheet.create({
   formSubtitle: { fontSize: 14, color: colors.textSecondary, marginBottom: 6 },
   input: {
     backgroundColor: colors.bgCard,
-    borderWidth: 1, borderColor: colors.border,
+    borderWidth: 0.5, borderColor: colors.border,
     borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14,
     fontSize: 15, color: colors.textPrimary,
   },
-  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  checkRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: colors.bgCard, borderRadius: 12,
+    borderWidth: 0.5, borderColor: colors.border,
+    paddingVertical: 14, paddingHorizontal: 16,
+  },
   checkbox: {
     width: 22, height: 22, borderRadius: 6,
-    borderWidth: 2, borderColor: colors.plumbob,
+    borderWidth: 0.5, borderColor: colors.plumbob,
     alignItems: 'center', justifyContent: 'center',
   },
   checkboxChecked: { backgroundColor: colors.plumbob },

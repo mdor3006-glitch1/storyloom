@@ -399,6 +399,31 @@ CREATE POLICY "scene_images_delete_own"
 
 
 -- ============================================================
+-- PART 5 — Auto-delete expired stories (pg_cron)
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION public.delete_expired_stories()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  DELETE FROM public.stories
+  WHERE
+    is_favourite = false
+    AND expires_at IS NOT NULL
+    AND expires_at < NOW();
+END;
+$$;
+
+SELECT cron.schedule(
+  'delete-expired-stories',
+  '0 3 * * *',
+  $$SELECT public.delete_expired_stories();$$
+);
+
+
+-- ============================================================
 -- VERIFICATION — Run this after the above to confirm success
 -- ============================================================
 

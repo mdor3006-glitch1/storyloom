@@ -32,6 +32,25 @@ CONTENT RULES:
 - Dark themes: betrayal, grief, obsession, moral ambiguity — fully embrace them
 - Strong language acceptable for 18+ audience
 
+GENRE WRITING GUIDE — apply to every scene_text, dialogue, and image_prompt:
+- Romance: charged silences, lingering physical details, subtext, heat and longing in every exchange
+- Thriller: short punchy sentences, false calm before danger, paranoia, trust no one
+- Fantasy: world-building texture woven into action, magic treated as matter-of-fact, mythic weight
+- Horror: creeping dread, wrong details, what is NOT seen, isolation, short sharp sentences
+- Drama: emotional restraint that cracks, realistic speech, consequences that ripple forward
+- Sci-Fi: world logic consistency, technology as character, vast or claustrophobic scale
+- Comedy: comedic timing in dialogue beats, absurdist escalation, reactions carry the joke
+- Brainrot: deadpan normality — characters treat their surreal world as completely mundane
+
+TONE WRITING GUIDE — layer on top of genre:
+- Light & Fun: breezy pacing, witty banter, stakes feel playful not deadly
+- Dark & Intense: heavy atmosphere, short sentences, no comic relief, every word costs something
+- Romantic & Steamy: charged physical awareness, slow burn tension, sensory details
+- Mysterious: withheld information, loaded pauses, questions raised but not answered
+- Twisted: subvert expectations mid-scene, unreliable details, something is always slightly off
+- Cozy: warm sensory details, safe spaces, low external stakes, high emotional intimacy
+- Epic: grand scale language, weight of consequence, cinematic imagery
+
 CHARACTER RULES — CRITICAL:
 - Use character names (not he/she/they) in EVERY dialogue line and scene_text
 - From scene 3 onward: reference at least one consequence of a previous player choice
@@ -108,6 +127,7 @@ function buildCharacterBlock(characters) {
   return characters.map((c) => JSON.stringify({
     name: c.name,
     role: c.role,
+    appearance: (c.photo_url && !c.photo_url.startsWith('http')) ? c.photo_url : null,
     traits: c.traits,
     emotions: c.emotions,
     relationships: c.relationships,
@@ -123,13 +143,21 @@ function buildHistoryBlock(recentScenes) {
   ).join('\n\n');
 }
 
+const ART_STYLE_MAP = {
+  'Cinematic':   'Cinematic photorealistic style, dramatic film lighting, shallow depth of field, widescreen composition',
+  'Realistic':   'Photorealistic style, natural lighting, lifelike textures, authentic expressions',
+  'Anime':       'Anime illustration style, expressive eyes, dynamic poses, vibrant saturated colors',
+  'Illustrated': 'Digital illustration, painterly style, rich colors, storybook composition',
+  'Comic Book':  'Comic book panel art style, bold ink outlines, vibrant saturated colors, dramatic cinematic lighting, half-page illustration, Marvel DC Episode comic book aesthetic',
+  'Pixel Art':   'Retro pixel art style, 16-bit aesthetic, chunky pixels, limited color palette, SNES-era game sprite composition',
+  'Oil Painting':'Classical oil painting style, rich visible brushstrokes, dramatic chiaroscuro lighting, Renaissance fine art aesthetic',
+  'AI Decides':  'Cinematic photorealistic style, dramatic lighting, high-quality film still',
+};
+
 function buildComicImagePrompt(sceneData, characters, story) {
   const parts = [];
 
-  parts.push(
-    'Comic book panel art style, bold ink outlines, vibrant saturated colors, dramatic cinematic lighting, ' +
-    'half-page illustration, Marvel DC Episode comic book aesthetic'
-  );
+  parts.push(ART_STYLE_MAP[story.art_style] ?? ART_STYLE_MAP['Comic Book']);
 
   if (story.art_style && story.art_style.toLowerCase() !== 'default') {
     parts.push(`Art direction: ${story.art_style}`);
@@ -154,7 +182,7 @@ function buildComicImagePrompt(sceneData, characters, story) {
   if (contextTags) parts.push(`Setting: ${contextTags}`);
 
   parts.push(
-    'Professional comic book illustration, detailed character faces, dynamic composition, ' +
+    'Detailed character faces, dynamic composition, ' +
     'portrait 4:3 panel layout, high quality, sharp lines, no watermark'
   );
 

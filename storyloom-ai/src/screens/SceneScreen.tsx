@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useReducer, useRef, useState } from 'rea
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Animated, AppState, AppStateStatus, useWindowDimensions, Easing, Pressable,
-  TextInput, Keyboard,
+  TextInput, Keyboard, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -15,6 +15,7 @@ import { useCreditStore } from '../store/creditStore';
 import { useFeatureFlagStore } from '../store/featureFlagStore';
 import { colors } from '../theme/colors';
 import { getGenreMeta } from '../theme/genre';
+import GlassView from '../components/GlassView';
 import Plumbob from '../components/Plumbob';
 import { SoundService } from '../services/SoundService';
 import { HapticService } from '../services/HapticService';
@@ -66,7 +67,8 @@ type StageAction =
   | { type: 'next_scene_ready' }
   | { type: 'begin_crossfade' }
   | { type: 'reset_for_new_scene'; dialogueLength: number }
-  | { type: 'show_overflow' };
+  | { type: 'show_overflow' }
+  | { type: 'restore_choices' };
 
 function stageReducer(s: StageState, a: StageAction): StageState {
   switch (a.type) {
@@ -118,6 +120,16 @@ function stageReducer(s: StageState, a: StageAction): StageState {
       return { ...s, phase: 'crossfade' };
     case 'show_overflow':
       return { ...s, phase: 'loading_overflow' };
+    case 'restore_choices':
+      return {
+        ...s,
+        phase: 'reading',
+        choicesRevealed: true,
+        dialoguePaused: true,
+        fillerStart: null,
+        nextSceneReady: false,
+        choiceIndex: null,
+      };
     default:
       return s;
   }
@@ -187,7 +199,7 @@ interface BubbleProps {
 function ChatBubble({ line, isMain, showPortrait, text, showCursor, slideAnim, screenWidth }: BubbleProps) {
   const MAX_W = screenWidth * MAX_BUBBLE_WIDTH;
   const nameColor  = isMain ? colors.charMain : colors.charSecond;
-  const bubbleTint = isMain ? 'rgba(29,185,84,0.30)' : 'rgba(59,130,246,0.30)';
+  const bubbleTint = isMain ? 'rgba(127,119,221,0.22)' : 'rgba(123,47,190,0.22)';
 
   const translateX = slideAnim.interpolate({
     inputRange: [0, 1],
@@ -262,13 +274,17 @@ export default function SceneScreen() {
   const setCurrentScene = useStoryStore((s) => s.setCurrentScene);
   const setActiveStory  = useStoryStore((s) => s.setActiveStory);
   const setUndoAvail    = useStoryStore((s) => s.setUndoAvailable);
-  const creditBalance   = useCreditStore((s) => s.balance);
+  const creditBalance        = useCreditStore((s) => s.balance);
+  const storeDeductCredits   = useCreditStore((s) => s.deductCredits);
   const newStageEnabled = useFeatureFlagStore((s) => s.isEnabled('new_stage_v2'));
 
   const [scene, setScene]       = useState<Scene | null>(currentScene ?? null);
   const [nextScene, setNextScene] = useState<Scene | null>(null);
   const [nextScenePrefetched, setNextScenePrefetched] = useState(false);
   const [choosing, setChoosing] = useState(false);
+  const [showTransitionButton, setShowTransitionButton] = useState(false);
+  const [transitionBtnEnabled, setTransitionBtnEnabled] = useState(false);
+  const [countdownStep, setCountdownStep] = useState(1);
 
   const [stage, dispatch] = useReducer(stageReducer, {
     phase: 'reading',
@@ -291,8 +307,11 @@ export default function SceneScreen() {
   const pollCount         = useRef(0);
   const sceneMountedAt    = useRef<number>(Date.now());
   const choiceTapAt       = useRef<number | null>(null);
-  const pendingRequestRef = useRef<AbortController | null>(null);
-  const charOrder         = useRef<string[]>([]);
+  const pendingRequestRef        = useRef<AbortController | null>(null);
+  const charOrder                = useRef<string[]>([]);
+  const transitionTimerRef       = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const transitionBtnTriggeredRef = useRef(false);
+  const pendingChoiceRef         = useRef<{ choice: string | null; freeformText: string | null } | null>(null);
 
   // Animated
   const slideAnims     = useRef<Animated.Value[]>([]);
@@ -340,6 +359,7 @@ export default function SceneScreen() {
       abortRef.current?.abort();
       pendingRequestRef.current?.abort();
       if (pollRef.current) clearInterval(pollRef.current);
+      transitionTimerRef.current.forEach(clearTimeout);
     };
   }, []);
 
@@ -403,7 +423,7 @@ export default function SceneScreen() {
         return;
       }
       // Resume typewriter from where we left off (only if still in a typing phase)
-      if ((stage.phase === 'reading' || stage.phase === 'stall_filler') && scene && !typingRef.current) {
+      if ((stage.phase === 'reading' || (stage.phase === 'stall_filler' && stage.visibleBubbles === 0)) && scene && !typingRef.current) {
         startTypewriter(stage.phase === 'stall_filler' ? 'filler' : 'dialogue');
       }
     }
@@ -427,6 +447,7 @@ export default function SceneScreen() {
         // /scenes-current returns the newest row, which could race with an undo
         // or a concurrent pregen write and hand us the wrong image.
         if (data?.scene?.id === targetSceneId && data.scene.image_url) {
+          try { await Image.prefetch(data.scene.image_url); } catch { /* ignore */ }
           setScene(prev => (prev && prev.id === targetSceneId
             ? { ...prev, image_url: data.scene.image_url }
             : prev));
@@ -436,7 +457,7 @@ export default function SceneScreen() {
     }, IMAGE_POLL_INTERVAL);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scene?.id]);
+  }, [scene?.id, scene?.image_url]);
 
   // ── Weather overlay ───────────────────────────────────────
   useEffect(() => {
@@ -595,8 +616,20 @@ export default function SceneScreen() {
       typingRef.current = false;
     }
 
-    // Filler typewriter ended: check if we can crossfade
-    if (which === 'filler') evaluateCrossfade();
+    if (which === 'dialogue' && !stage.choicesRevealed) {
+      dispatch({ type: 'reveal_choices' });
+      SoundService.play('choicesAppear', 0.6);
+      Animated.spring(choicesSlide, { toValue: 1, friction: 7, tension: 80, useNativeDriver: true }).start();
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(choicesPulse, { toValue: 1.03, duration: 700, useNativeDriver: true }),
+          Animated.timing(choicesPulse, { toValue: 1.0,  duration: 700, useNativeDriver: true }),
+        ])
+      ).start();
+    }
+    // Filler typewriter ended: show transition button
+    console.log('[DEBUG] startTypewriter end reached, which=', which);
+    if (which === 'filler') triggerTransitionButton();
   }
 
   // Resume pre-choice dialogue after user chose.
@@ -650,6 +683,7 @@ export default function SceneScreen() {
   const handleChoice = useCallback(async (choice: string, choiceIndex: number, opts?: { isFreeform?: boolean; text?: string }) => {
     if (choosing) return;
     setChoosing(true);
+    pendingChoiceRef.current = { choice: opts?.isFreeform ? null : choice, freeformText: opts?.isFreeform ? (opts.text ?? null) : null };
     choiceTapAt.current = Date.now();
     HapticService.choiceTap();
 
@@ -669,6 +703,7 @@ export default function SceneScreen() {
     // Legacy path: if flag off OR scene has no filler_dialogue, use old navigation
     const fillerCount = scene?.filler_dialogue?.length ?? 0;
     const useNewStage = newStageEnabled && fillerCount >= 3 && !scene?.is_final_scene;
+    console.log('[DEBUG] handleChoice gate', { newStageEnabled, fillerCount, isFinal: scene?.is_final_scene, useNewStage });
 
     if (!useNewStage) {
       // Preserve existing visual feel: resume remaining dialogue, then navigate
@@ -720,6 +755,13 @@ export default function SceneScreen() {
       if (!isMountedRef.current) return;
 
       if (data?.__error) {
+        const httpStatus = data.__error?.response?.status;
+        if (httpStatus === 402) {
+          dispatch({ type: 'restore_choices' });
+          setChoosing(false);
+          Alert.alert('Not enough credits', 'A free choice costs ◆ 10 credits.');
+          return;
+        }
         console.warn('[SceneScreen] request failed', data.__error?.message);
         dispatch({ type: 'show_overflow' });
         setTimeout(() => {
@@ -734,6 +776,7 @@ export default function SceneScreen() {
       }
 
       if (data?.scene) {
+        if (opts?.isFreeform) storeDeductCredits(10);
         setNextScene(data.scene);
         if (data.scene.image_url) {
           for (const delayMs of PREFETCH_BACKOFF_MS) {
@@ -752,7 +795,7 @@ export default function SceneScreen() {
         evaluateCrossfade();
       }
     })();
-  }, [choosing, scene, newStageEnabled, navigation, storyId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [choosing, scene, newStageEnabled, navigation, storyId, storeDeductCredits]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Poll for nextScene image if not present yet (bundle miss)
   async function pollForNextImage(sceneId: string) {
@@ -763,8 +806,7 @@ export default function SceneScreen() {
         const { data } = await api.get(`/stories/${storyId}/scenes-current`);
         if (data?.scene?.id === sceneId && data.scene.image_url) {
           setNextScene(prev => prev ? { ...prev, image_url: data.scene.image_url } : prev);
-          try { await Image.prefetch(data.scene.image_url); } catch { /* ignore */ }
-          setNextScenePrefetched(true);
+          try { await Image.prefetch(data.scene.image_url); setNextScenePrefetched(true); } catch { /* ignore */ }
           return;
         }
       } catch { /* ignore */ }
@@ -774,18 +816,13 @@ export default function SceneScreen() {
   // ── Evaluate whether to crossfade ─────────────────────────
   function evaluateCrossfade() {
     if (stage.phase !== 'stall_filler') return;
+    if (transitionBtnTriggeredRef.current) return;
     const fillerStart = stage.fillerStart ?? Date.now();
     const elapsed = Date.now() - fillerStart;
-    const ready = !!nextScene && nextScenePrefetched;
 
-    if (ready && elapsed >= MIN_FILLER_MS) {
-      beginCrossfade();
-    } else if (elapsed >= MAX_FILLER_MS) {
-      // Overflow — crossfade anyway if we at least have scene data
-      if (nextScene) beginCrossfade();
-      else dispatch({ type: 'show_overflow' });
+    if (elapsed >= MAX_FILLER_MS) {
+      triggerTransitionButton();
     } else {
-      // Check again after a short delay
       setTimeout(evaluateCrossfade, 500);
     }
   }
@@ -813,6 +850,12 @@ export default function SceneScreen() {
       setNextScene(null);
       setNextScenePrefetched(false);
       setChoosing(false);
+      setShowTransitionButton(false);
+      setTransitionBtnEnabled(false);
+      setCountdownStep(1);
+      transitionBtnTriggeredRef.current = false;
+      transitionTimerRef.current.forEach(clearTimeout);
+      transitionTimerRef.current = [];
 
       // Log perceived wait
       if (choiceTapAt.current) {
@@ -858,6 +901,33 @@ export default function SceneScreen() {
     if (nextScene && nextScenePrefetched) beginCrossfade();
   }
 
+  function triggerTransitionButton() {
+    console.log('[DEBUG] triggerTransitionButton called, alreadyTriggered=', transitionBtnTriggeredRef.current);
+    if (transitionBtnTriggeredRef.current) return;
+    transitionBtnTriggeredRef.current = true;
+    setShowTransitionButton(true);
+    console.log('[DEBUG] showTransitionButton set to true');
+    const t1 = setTimeout(() => setCountdownStep(2), 1750);
+    const t2 = setTimeout(() => setCountdownStep(3), 3500);
+    const t3 = setTimeout(() => setCountdownStep(4), 5250);
+    const t4 = setTimeout(() => { console.log('[DEBUG] transitionBtnEnabled set to true'); setTransitionBtnEnabled(true); }, 7000);
+    transitionTimerRef.current = [t1, t2, t3, t4];
+  }
+
+  function onTransitionButtonTap() {
+    if (!transitionBtnEnabled) return;
+    if (nextScene) {
+      beginCrossfade();
+    } else {
+      navigation.navigate('LoadingScene', {
+        storyId,
+        playerChoice:     pendingChoiceRef.current?.choice ?? undefined,
+        playerTextInput:  pendingChoiceRef.current?.freeformText ?? undefined,
+        reason: 'stall_overflow',
+      } as any);
+    }
+  }
+
   // ── Render ────────────────────────────────────────────────
   if (!scene) {
     return (
@@ -880,30 +950,33 @@ export default function SceneScreen() {
   return (
     <View style={styles.screen}>
       {/* ── Dual-buffered image layers ── */}
-      {imageUri ? (
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: genreColor }]}>
+        {!imageUri && (
+          <View style={[StyleSheet.absoluteFillObject, { alignItems: 'center', justifyContent: 'center' }]}>
+            <Plumbob size={80} animated color={genreColor} />
+          </View>
+        )}
+      </View>
+      {imageUri && (
         <Image
           source={{ uri: imageUri }}
           style={StyleSheet.absoluteFillObject}
           contentFit="cover"
           transition={300}
+          onError={() => setScene(prev => prev ? { ...prev, image_url: null } : prev)}
         />
-      ) : (
-        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: genreColor + '33' }]}>
-          <View style={[StyleSheet.absoluteFillObject, { alignItems: 'center', justifyContent: 'center' }]}>
-            <Plumbob size={80} animated color={genreColor} />
-          </View>
-        </View>
       )}
       {/* Next-scene image layered on top, faded in during crossfade */}
       {nextImageUri && (
         <Animated.View
-          style={[StyleSheet.absoluteFillObject, { opacity: crossfadeAnim }]}
+          style={[StyleSheet.absoluteFillObject, { opacity: crossfadeAnim, backgroundColor: genreColor + '33' }]}
           pointerEvents="none"
         >
           <Image
             source={{ uri: nextImageUri }}
             style={StyleSheet.absoluteFillObject}
             contentFit="cover"
+            onError={() => setNextScene(prev => prev ? { ...prev, image_url: null } : prev)}
           />
         </Animated.View>
       )}
@@ -1012,6 +1085,20 @@ export default function SceneScreen() {
           )}
         </Pressable>
       )}
+      {stage.phase === 'stall_filler' && showTransitionButton && (
+        <View style={styles.transitionBtnWrap} pointerEvents="box-none">
+          <TouchableOpacity
+            style={[styles.transitionBtn, transitionBtnEnabled && { borderColor: genreColor }]}
+            onPress={onTransitionButtonTap}
+            disabled={!transitionBtnEnabled}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.transitionBtnText, transitionBtnEnabled && { color: '#fff' }]}>
+              {countdownStep}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Choices (only in reading phase) */}
       {stage.phase === 'reading' && stage.choicesRevealed && choices.length > 0 && (
@@ -1026,6 +1113,14 @@ export default function SceneScreen() {
           ]}
           pointerEvents={stage.phase === 'reading' ? 'auto' : 'none'}
         >
+          <GlassView
+            intensity={80}
+            tint="dark"
+            androidFallbackColor="rgba(0,0,0,0.65)"
+            style={StyleSheet.absoluteFillObject}
+          >
+            <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.20)' }]} />
+          </GlassView>
           <Animated.View style={{ transform: [{ scale: choicesPulse }] }}>
             <Text style={styles.choicesLabel}>✨ Your Choice</Text>
           </Animated.View>
@@ -1040,8 +1135,18 @@ export default function SceneScreen() {
               borderColor={genreColor}
             />
           ))}
-          {scene.can_text_input && (
-            <FreeformChoiceSheet disabled={choosing} onSubmit={onTapFreeform} borderColor={genreColor} />
+          {scene.can_text_input ? (
+            <FreeformChoiceSheet
+              disabled={choosing}
+              onSubmit={onTapFreeform}
+              borderColor={genreColor}
+              canAfford={creditBalance >= 10}
+            />
+          ) : (
+            <View style={styles.freeformLocked}>
+              <Text style={styles.freeformLockedText}>✏ Free choice — not this scene</Text>
+              <Text style={styles.freeformLockedCost}>◆ 10</Text>
+            </View>
           )}
         </Animated.View>
       )}
@@ -1166,16 +1271,18 @@ function ChoiceButton({ choice, index, hint, disabled, onPress, borderColor }: {
 }
 
 // ── FreeformChoiceSheet (Type A only) ─────────────────────────
-function FreeformChoiceSheet({ disabled, onSubmit, borderColor }: {
+function FreeformChoiceSheet({ disabled, onSubmit, borderColor, canAfford }: {
   disabled: boolean;
   onSubmit: (text: string) => void;
   borderColor: string;
+  canAfford: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [text, setText]         = useState('');
   const heightAnim = useRef(new Animated.Value(0)).current;
 
   const expand = () => {
+    if (!canAfford) return;
     setExpanded(true);
     Animated.timing(heightAnim, { toValue: 1, duration: 220, useNativeDriver: false }).start();
   };
@@ -1186,16 +1293,28 @@ function FreeformChoiceSheet({ disabled, onSubmit, borderColor }: {
   };
   const submit = () => {
     const t = text.trim();
-    if (!t) return;
+    if (!t || !canAfford) return;
     Keyboard.dismiss();
     onSubmit(t);
   };
 
+  const triggerColor = canAfford ? borderColor : 'rgba(255,255,255,0.3)';
+
   return (
     <View style={styles.freeformWrap}>
       {!expanded && (
-        <TouchableOpacity onPress={expand} disabled={disabled} activeOpacity={0.8} style={styles.freeformTrigger}>
-          <Text style={[styles.freeformTriggerText, { color: borderColor }]}>⌨ Or type your own action…</Text>
+        <TouchableOpacity
+          onPress={expand}
+          disabled={disabled || !canAfford}
+          activeOpacity={0.8}
+          style={styles.freeformTrigger}
+        >
+          <Text style={[styles.freeformTriggerText, { color: triggerColor }]}>
+            ⌨ Or type your own action…
+          </Text>
+          <Text style={[styles.freeformCostBadge, { color: triggerColor }]}>
+            {canAfford ? '◆ 10' : '◆ 10 — Need more'}
+          </Text>
         </TouchableOpacity>
       )}
       {expanded && (
@@ -1217,10 +1336,10 @@ function FreeformChoiceSheet({ disabled, onSubmit, borderColor }: {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={submit}
-                disabled={disabled || !text.trim()}
-                style={[styles.freeformSend, { backgroundColor: borderColor, opacity: text.trim() ? 1 : 0.4 }]}
+                disabled={disabled || !text.trim() || !canAfford}
+                style={[styles.freeformSend, { backgroundColor: borderColor, opacity: (text.trim() && canAfford) ? 1 : 0.4 }]}
               >
-                <Text style={styles.freeformSendText}>Send →</Text>
+                <Text style={styles.freeformSendText}>Send ◆ 10</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1253,8 +1372,9 @@ const styles = StyleSheet.create({
   },
   moodPill: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.25)',
     borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5,
+    borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.15)',
   },
   moodIcon:  { fontSize: 11 },
   moodLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 1 },
@@ -1262,19 +1382,20 @@ const styles = StyleSheet.create({
   diamondRow: { flex: 1, flexDirection: 'row', gap: 3, alignItems: 'center', flexWrap: 'wrap' },
   diamond: {
     width: 8, height: 8, borderRadius: 2,
-    borderWidth: 1.5, transform: [{ rotate: '45deg' }],
+    borderWidth: 0.5, transform: [{ rotate: '45deg' }],
     backgroundColor: 'transparent', opacity: 0.6,
   },
 
   creditPill: {
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.25)',
     borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5,
+    borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.15)',
   },
   creditPillText: { fontSize: 11, fontWeight: '800', color: '#fff' },
   creditPillRed:  { color: '#EF4444' },
 
   bubblesScroll: { flex: 1, marginTop: 100, zIndex: 5 },
-  bubblesContent: { paddingHorizontal: 14, paddingTop: 10, gap: 10 },
+  bubblesContent: { paddingHorizontal: 14, paddingTop: 10, gap: 12 },
 
   bubbleRow:      { flexDirection: 'row', alignItems: 'flex-end', gap: 8, maxWidth: '85%' },
   bubbleRowLeft:  { alignSelf: 'flex-start' },
@@ -1282,7 +1403,7 @@ const styles = StyleSheet.create({
 
   portrait: {
     width: 36, height: 36, borderRadius: 18,
-    borderWidth: 2, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 0.5, alignItems: 'center', justifyContent: 'center',
     flexShrink: 0,
   },
   portraitInitial: { fontSize: 14, fontWeight: '900' },
@@ -1292,7 +1413,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   bubble: {
-    borderRadius: 16, paddingHorizontal: 13, paddingVertical: 9,
+    borderRadius: 16, paddingHorizontal: 10, paddingVertical: 6,
     position: 'relative',
   },
   bubbleLeft:  { borderTopLeftRadius: 4 },
@@ -1309,7 +1430,7 @@ const styles = StyleSheet.create({
 
   bubbleText: {
     fontSize: 15, color: '#FFFFFF',
-    lineHeight: 21, fontWeight: '500',
+    lineHeight: 22, fontWeight: '500',
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
@@ -1319,7 +1440,10 @@ const styles = StyleSheet.create({
   choicesContainer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     paddingHorizontal: 14, paddingTop: 12, gap: 8,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    borderTopWidth: 0.5, borderLeftWidth: 0.5, borderRightWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.15)',
+    overflow: 'hidden',
     zIndex: 20,
   },
   choicesLabel: {
@@ -1332,9 +1456,9 @@ const styles = StyleSheet.create({
   choiceBtnWrap: { position: 'relative' },
   choiceBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 14, borderWidth: 1.5,
-    paddingHorizontal: 13, paddingVertical: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 14, borderWidth: 0.5,
+    paddingHorizontal: 13, paddingVertical: 14,
   },
   choiceIndex: {
     width: 24, height: 24, borderRadius: 12,
@@ -1370,9 +1494,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.7)',
   },
   chapterCard: {
-    borderRadius: 16, borderWidth: 1.5,
+    borderRadius: 16, borderWidth: 0.5,
     paddingHorizontal: 32, paddingVertical: 20,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.25)',
   },
   chapterText: { fontSize: 20, fontWeight: '900', letterSpacing: 1, textAlign: 'center' },
 
@@ -1410,14 +1534,24 @@ const styles = StyleSheet.create({
 
   freeformWrap: { marginTop: 6 },
   freeformTrigger: {
-    paddingVertical: 10, alignItems: 'center',
+    paddingVertical: 10, paddingHorizontal: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
   freeformTriggerText: { fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
+  freeformCostBadge: { fontSize: 11, fontWeight: '800' },
+  freeformLocked: {
+    marginTop: 6, paddingVertical: 10, paddingHorizontal: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  freeformLockedText: { fontSize: 13, fontWeight: '800', letterSpacing: 0.5, color: 'rgba(255,255,255,0.25)' },
+  freeformLockedCost: { fontSize: 11, fontWeight: '800', color: 'rgba(255,255,255,0.25)' },
   freeformExpanded: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 14, borderWidth: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 14, borderWidth: 0.5,
     padding: 10, gap: 8,
   },
   freeformInput: {
@@ -1430,12 +1564,25 @@ const styles = StyleSheet.create({
   },
   freeformCount: { fontSize: 11, color: 'rgba(255,255,255,0.6)', fontWeight: '700' },
   freeformCancel: {
-    paddingHorizontal: 12, paddingVertical: 8,
+    paddingHorizontal: 12, paddingVertical: 12,
   },
   freeformCancelText: { fontSize: 12, fontWeight: '800', color: 'rgba(255,255,255,0.7)' },
   freeformSend: {
-    paddingHorizontal: 14, paddingVertical: 8,
+    paddingHorizontal: 14, paddingVertical: 12,
     borderRadius: 10,
   },
   freeformSendText: { fontSize: 12, fontWeight: '900', color: '#fff' },
+
+  transitionBtnWrap: {
+    position: 'absolute', bottom: 110, left: 0, right: 0, alignItems: 'center', zIndex: 10,
+  },
+  transitionBtn: {
+    width: 64, height: 64, borderRadius: 32, borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  transitionBtnText: {
+    fontSize: 24, fontWeight: '800', color: 'rgba(255,255,255,0.60)',
+  },
 });

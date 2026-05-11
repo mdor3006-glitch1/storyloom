@@ -161,10 +161,10 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     backgroundColor: colors.bgCard,
-    borderRadius: 18,
-    marginBottom: 10,
+    borderRadius: 12,
+    marginBottom: 6,
     overflow: 'hidden',
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: colors.border,
   },
   accentBar: { width: 4 },

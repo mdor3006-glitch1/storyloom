@@ -16,6 +16,7 @@ import LoadingSceneScreen from '../screens/LoadingSceneScreen';
 import EndingScreen from '../screens/EndingScreen';
 import { colors } from '../theme/colors';
 import { HapticService } from '../services/HapticService';
+import GlassView from '../components/GlassView';
 
 export type MainTabParamList = {
   Home: undefined;
@@ -77,7 +78,13 @@ function WiiTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   }
 
   return (
-    <View style={[styles.tabBar, { paddingBottom: insets.bottom || 12 }]}>
+    <GlassView
+      intensity={60}
+      tint="dark"
+      androidFallbackColor="rgba(0,0,0,0.75)"
+      style={[styles.tabBar, { paddingBottom: insets.bottom || 12 }]}
+    >
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,0,0,0.20)' }]} />
       <View style={styles.tabBarInner}>
         {state.routes.map((route, index) => {
           const isFocused = state.index === index;
@@ -100,7 +107,7 @@ function WiiTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           );
         })}
       </View>
-    </View>
+    </GlassView>
   );
 }
 
@@ -135,33 +142,35 @@ export default function MainStack() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: colors.tabBg,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(255,255,255,0.15)',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 12,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 20,
   },
   tabBarInner: { flexDirection: 'row', paddingTop: 8, paddingHorizontal: 8, gap: 4 },
   tabPressable: { flex: 1, alignItems: 'center' },
   tabItem: {
     width: 60, height: 50, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: 'transparent',
     gap: 2,
   },
   tabItemActive: {
-    backgroundColor: colors.plumbob,
+    backgroundColor: 'rgba(127,119,221,0.50)',
     shadowColor: colors.plumbob,
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
     elevation: 5,
   },
   tabIcon:        { fontSize: 18, opacity: 0.55 },
   tabIconActive:  { opacity: 1 },
-  tabLabel:       { fontSize: 9, fontWeight: '600', color: colors.tabInactive },
-  tabLabelActive: { color: '#FFFFFF', fontWeight: '800' },
+  tabLabel:       { fontSize: 7.5, fontWeight: '500', color: colors.tabInactive },
+  tabLabelActive: { color: 'rgba(255,255,255,0.90)', fontWeight: '500' },
 });

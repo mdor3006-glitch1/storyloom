@@ -31,7 +31,7 @@ export default function LogoComponent({ size = 'medium', showWordmark = true, an
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
-      <DiamondLoader size={cfg.diamond} color="#1db954" animated={animated} showSparkles={false} />
+      <DiamondLoader size={cfg.diamond} color="#7F77DD" animated={animated} showSparkles={false} />
       {showWordmark && (
         <View style={styles.wordmarkRow}>
           <Text style={[styles.wordmark, { fontSize: cfg.wordmark }]}>StoryLoom</Text>
@@ -46,5 +46,5 @@ const styles = StyleSheet.create({
   container:   { flexDirection: 'row', alignItems: 'center', gap: 8 },
   wordmarkRow: { flexDirection: 'row', alignItems: 'baseline', gap: 3 },
   wordmark:    { fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5 },
-  ai:          { fontWeight: '900', color: '#1db954', letterSpacing: 1 },
+  ai:          { fontWeight: '900', color: '#7F77DD', letterSpacing: 1 },
 });

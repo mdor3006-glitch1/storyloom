@@ -177,12 +177,12 @@ export default function StoryElementsPickerScreen() {
 const styles = StyleSheet.create({
   screen:      { flex: 1, backgroundColor: colors.bg },
   header:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12, gap: 10 },
-  backBtn:     { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.bgCard, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border },
+  backBtn:     { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.bgCard, alignItems: 'center', justifyContent: 'center', borderWidth: 0.5, borderColor: colors.border },
   backText:    { fontSize: 18, color: colors.textSecondary },
   headerCenter:{ flex: 1 },
   title:       { fontSize: 18, fontWeight: '900', color: colors.textPrimary },
   subtitle:    { fontSize: 12, color: colors.textMuted, marginTop: 1 },
-  skipBtn:     { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: colors.bgCard, borderWidth: 1, borderColor: colors.border },
+  skipBtn:     { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.18)' },
   skipText:    { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
 
   counterRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 8 },
@@ -194,18 +194,18 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 16 },
 
   section:     { marginBottom: 20 },
-  sectionLabel: { fontSize: 10, fontWeight: '800', color: colors.plumbob, letterSpacing: 2, marginBottom: 10 },
+  sectionLabel: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.35)', letterSpacing: 0.7, marginBottom: 10 },
 
-  card:        { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: colors.bgCard, borderRadius: 14, borderWidth: 1.5, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 8 },
-  cardActive:  { borderColor: colors.plumbob, backgroundColor: colors.plumbobGlow },
+  card:        { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 14, borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.20)', paddingHorizontal: 14, paddingVertical: 14, marginBottom: 8 },
+  cardActive:  { borderColor: 'rgba(127,119,221,0.70)', backgroundColor: 'rgba(127,119,221,0.20)' },
   cardEmoji:   { fontSize: 24, width: 32, textAlign: 'center' },
   cardText:    { flex: 1 },
-  cardTitle:   { fontSize: 14, fontWeight: '700', color: colors.textSecondary },
-  cardTitleActive: { color: colors.textPrimary },
+  cardTitle:   { fontSize: 14, fontWeight: '700', color: 'rgba(255,255,255,0.55)' },
+  cardTitleActive: { color: '#AFA9EC' },
   cardDesc:    { fontSize: 11, color: colors.textMuted, marginTop: 2 },
   checkmark:   { fontSize: 16, color: colors.plumbob, fontWeight: '900' },
 
   footer:      { paddingHorizontal: 16, paddingTop: 10 },
-  goBtn:       { backgroundColor: colors.plumbob, borderRadius: 16, paddingVertical: 16, alignItems: 'center', shadowColor: colors.plumbob, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 6 },
+  goBtn:       { backgroundColor: 'rgba(127,119,221,0.80)', borderRadius: 999, paddingVertical: 16, alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(127,119,221,0.90)', shadowColor: colors.plumbob, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 6 },
   goBtnText:   { fontSize: 17, fontWeight: '900', color: '#fff', letterSpacing: 0.3 },
 });

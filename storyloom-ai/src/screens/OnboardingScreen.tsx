@@ -170,8 +170,8 @@ const styles = StyleSheet.create({
   iconArea: { marginBottom: 40, alignItems: 'center', justifyContent: 'center', height: 120 },
   iconOrb: {
     width: 120, height: 120, borderRadius: 60,
-    borderWidth: 2, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(15,23,42,0.04)',
+    borderWidth: 0.5, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.07)',
   },
   iconEmoji: { fontSize: 52 },
 
@@ -187,15 +187,16 @@ const styles = StyleSheet.create({
 
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 24 },
   dot: {
-    width: 8, height: 8, borderRadius: 4,
-    backgroundColor: 'rgba(15,23,42,0.15)',
+    width: 8, height: 3, borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
 
   footer: { paddingHorizontal: 28, paddingBottom: 24 },
   ctaBtn: {
-    borderRadius: 20, paddingVertical: 18,
+    borderRadius: 999, paddingVertical: 18,
     alignItems: 'center', justifyContent: 'center',
     flexDirection: 'row', gap: 10,
+    borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.25)',
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.35, shadowRadius: 12, elevation: 7,
   },

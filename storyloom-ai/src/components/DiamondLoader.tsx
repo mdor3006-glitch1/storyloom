@@ -11,7 +11,7 @@ const GENRE_COLORS: Record<string, string> = {
   Drama:              '#1565C0',
   Brainrot:           '#FF6B6B',
   'Cartoon Characters': '#FF6B6B',
-  default:            '#1db954',
+  default:            '#7F77DD',
 };
 
 export function getGenreColor(genre?: string): string {
@@ -25,7 +25,7 @@ interface Props {
   showSparkles?: boolean;
 }
 
-export default function DiamondLoader({ size = 80, color = '#1db954', animated = true, showSparkles = true }: Props) {
+export default function DiamondLoader({ size = 80, color = '#7F77DD', animated = true, showSparkles = true }: Props) {
   const rotation   = useRef(new Animated.Value(0)).current;
   const pulse      = useRef(new Animated.Value(1)).current;
   const sparkle1   = useRef(new Animated.Value(0)).current;

@@ -12,7 +12,7 @@ interface FeatureFlagState {
 }
 
 export const useFeatureFlagStore = create<FeatureFlagState>((set, get) => ({
-  flags: {},
+  flags: { new_stage_v2: true },
   setFlags: (flags) => set({ flags: flags ?? {} }),
   isEnabled: (key) => Boolean(get().flags[key]),
 }));

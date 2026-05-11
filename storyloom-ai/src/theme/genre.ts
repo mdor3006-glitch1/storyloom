@@ -19,7 +19,7 @@ export const GENRE_META: Record<string, GenreMeta> = {
   'Psychological Thriller':{ primary: '#4A0080', secondary: '#0d0d0d', icon: '🧠', gradient: ['#4A0080', '#0d0d0d'], plusOnly: true  },
   'Epic Fantasy':         { primary: '#B8860B', secondary: '#1a0a3e', icon: '⚔️', gradient: ['#B8860B', '#1a0a3e'], plusOnly: true  },
   'Cosmic Horror':        { primary: '#003366', secondary: '#000000', icon: '🌀', gradient: ['#003366', '#000000'], plusOnly: true  },
-  default:                { primary: '#1db954', secondary: '#048A81', icon: '📖', gradient: ['#1db954', '#048A81'], plusOnly: false },
+  default:                { primary: '#7F77DD', secondary: '#5B54B8', icon: '📖', gradient: ['#7F77DD', '#5B54B8'], plusOnly: false },
 };
 
 export function getGenreMeta(genre: string | undefined): GenreMeta {

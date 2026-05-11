@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
     padding: 28,
     alignItems: 'center',
     marginBottom: 28,
-    borderWidth: 1.5,
+    borderWidth: 0.5,
     borderColor: colors.plumbobBorder,
     overflow: 'hidden',
     gap: 6,
@@ -214,8 +214,8 @@ const styles = StyleSheet.create({
   balanceDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: colors.textMuted },
 
   sectionTitle: {
-    fontSize: 9, fontWeight: '800', color: colors.plumbob,
-    letterSpacing: 2.5, marginBottom: 12,
+    fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.35)',
+    letterSpacing: 0.7, marginBottom: 12,
     paddingHorizontal: 18,
   },
 
@@ -228,14 +228,14 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 8,
     marginHorizontal: 18,
-    borderWidth: 1,
+    borderWidth: 0.5,
     borderColor: colors.border,
     gap: 12,
     overflow: 'hidden',
   },
   packCardHighlighted: {
     borderColor: colors.plumbobBorder,
-    backgroundColor: colors.plumbobGlow,
+    backgroundColor: 'rgba(127,119,221,0.25)',
   },
   popularBadge: {
     position: 'absolute', top: 0, right: 0,
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
   packCredits: { fontSize: 13, color: colors.textSecondary },
   packTagline: { fontSize: 11, color: colors.textMuted },
   priceTag: {
-    borderRadius: 12, borderWidth: 1.5,
+    borderRadius: 999, borderWidth: 0.5,
     paddingHorizontal: 12, paddingVertical: 6,
   },
   priceText: { fontSize: 15, fontWeight: '900' },
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 18,
-    borderBottomWidth: 1,
+    borderBottomWidth: 0.5,
     borderBottomColor: colors.border,
     gap: 12,
   },
@@ -281,9 +281,9 @@ const styles = StyleSheet.create({
   plusCard: {
     marginHorizontal: 18, marginBottom: 28,
     backgroundColor: colors.bgCard, borderRadius: 20, padding: 20,
-    borderWidth: 2, borderColor: colors.plumbobBorder,
+    borderWidth: 0.5, borderColor: colors.plumbobBorder,
     shadowColor: colors.plumbob, shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15, shadowRadius: 10, elevation: 4,
+    shadowOpacity: 0.20, shadowRadius: 12, elevation: 4,
   },
   plusHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
   plusIcon: { fontSize: 22, color: colors.plumbob },
@@ -300,8 +300,9 @@ const styles = StyleSheet.create({
   plusCheck: { fontSize: 13, color: colors.plumbob, fontWeight: '800', marginTop: 1 },
   plusBenefit: { fontSize: 13, color: colors.textSecondary, flex: 1, lineHeight: 18 },
   plusBtn: {
-    backgroundColor: colors.plumbob, borderRadius: 14,
+    backgroundColor: 'rgba(127,119,221,0.80)', borderRadius: 999,
     paddingVertical: 14, alignItems: 'center',
+    borderWidth: 0.5, borderColor: 'rgba(127,119,221,0.90)',
     shadowColor: colors.plumbob, shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35, shadowRadius: 10, elevation: 5,
   },

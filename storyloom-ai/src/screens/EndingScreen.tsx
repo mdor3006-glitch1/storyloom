@@ -45,9 +45,9 @@ const ENDING_CONFIGS = {
     particle: '⚡',
   },
   secret: {
-    bg: ['#000000', '#001a00'],
+    bg: ['#000000', '#0d0a1a'],
     headline: '🌟 Secret Ending',
-    color: '#1db954',
+    color: '#AFA9EC',
     particle: '✨',
   },
 };
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
   },
   divider: { width: 60, height: 2, borderRadius: 1 },
   genreBadge: {
-    borderRadius: 20, borderWidth: 1,
+    borderRadius: 20, borderWidth: 0.5,
     paddingHorizontal: 14, paddingVertical: 6,
   },
 
@@ -305,19 +305,20 @@ const styles = StyleSheet.create({
   ratingCard: {
     backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 20,
     padding: 20, gap: 12, alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.22)',
   },
   ratingTitle: { fontSize: 17, fontWeight: '800', color: '#fff' },
   starsRow:    { flexDirection: 'row', gap: 8 },
   star:        { fontSize: 28, opacity: 0.3 },
   starActive:  { opacity: 1 },
   ratingInput: {
-    width: '100%', backgroundColor: 'rgba(255,255,255,0.1)',
+    width: '100%', backgroundColor: 'rgba(255,255,255,0.07)',
     borderRadius: 12, padding: 12, color: '#fff', fontSize: 14,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', minHeight: 60,
+    borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.22)', minHeight: 60,
   },
   ratingSubmitBtn: {
-    backgroundColor: colors.plumbob, borderRadius: 12,
+    backgroundColor: 'rgba(127,119,221,0.80)', borderRadius: 999,
+    borderWidth: 0.5, borderColor: 'rgba(127,119,221,0.90)',
     paddingHorizontal: 24, paddingVertical: 10,
   },
   ratingSubmitText: { color: '#fff', fontWeight: '800', fontSize: 14 },
@@ -325,23 +326,23 @@ const styles = StyleSheet.create({
 
   // Share
   shareBtn: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 16, paddingVertical: 16,
-    alignItems: 'center', borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 999, paddingVertical: 16,
+    alignItems: 'center', borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.22)',
   },
   shareBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' },
 
   // Continue
   continuationCard: {
-    backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 20,
     padding: 20, gap: 8, alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.15)',
   },
   continuationTitle: { fontSize: 18, fontWeight: '900', color: '#fff' },
   continuationSub:   { fontSize: 13, color: 'rgba(255,255,255,0.65)', textAlign: 'center' },
   continueBtn: {
-    borderRadius: 14, paddingVertical: 14, paddingHorizontal: 28,
+    borderRadius: 999, paddingVertical: 14, paddingHorizontal: 28,
     marginTop: 8,
   },
   continueBtnText: { color: '#000', fontSize: 15, fontWeight: '900' },
@@ -350,12 +351,12 @@ const styles = StyleSheet.create({
   actions: { gap: 10, paddingBottom: 8 },
   actionBtn: { borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
   actionBtnSecondary: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(127,119,221,0.70)',
+    borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.22)',
   },
   actionBtnOutline: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'transparent',
+    borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.18)',
   },
   actionBtnText:        { color: '#fff', fontSize: 15, fontWeight: '700' },
   actionBtnTextOutline: { color: 'rgba(255,255,255,0.8)', fontSize: 15, fontWeight: '600' },

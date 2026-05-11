@@ -474,7 +474,7 @@ export default function StorySetupWizardScreen() {
         >
           {canProceed ? (
             <View style={styles.nextBtnInner}>
-              <Plumbob size={20} color={colors.bg} />
+              <Plumbob size={20} color="#ffffff" />
               <Text style={styles.nextButtonText}>
                 {step === TOTAL_STEPS - 1 ? 'Choose Characters' : 'Next'}
               </Text>
@@ -510,23 +510,22 @@ const styles = StyleSheet.create({
     width: 36, height: 36,
     borderRadius: 18,
     backgroundColor: colors.bgCard,
-    borderWidth: 1, borderColor: colors.border,
+    borderWidth: 0.5, borderColor: colors.border,
     alignItems: 'center', justifyContent: 'center',
   },
   backText: { fontSize: 16, color: colors.textSecondary },
   stepIndicator: { flex: 1, alignItems: 'center', gap: 8 },
   stepLabel: {
-    fontSize: 10, fontWeight: '800',
-    color: colors.plumbob, letterSpacing: 2.5,
+    fontSize: 10, fontWeight: '600',
+    color: 'rgba(255,255,255,0.35)', letterSpacing: 0.7,
   },
   progressRow: { flexDirection: 'row', gap: 5 },
   dot: {
-    width: 7, height: 7, borderRadius: 3.5,
-    backgroundColor: colors.bgCard,
-    borderWidth: 1, borderColor: colors.border,
+    width: 7, height: 3, borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
-  dotActive: { width: 22, backgroundColor: colors.plumbob, borderColor: colors.plumbob },
-  dotDone:   { backgroundColor: colors.plumbobDim, borderColor: colors.plumbobDim },
+  dotActive: { width: 22, backgroundColor: colors.plumbob },
+  dotDone:   { backgroundColor: colors.plumbob },
   stepCounter: { fontSize: 12, color: colors.textMuted, fontWeight: '700' },
 
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -534,8 +533,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 8, paddingVertical: 5,
     borderRadius: 10,
-    backgroundColor: colors.plumbobGlow,
-    borderWidth: 1, borderColor: colors.plumbobBorder,
+    backgroundColor: 'rgba(127,119,221,0.12)',
+    borderWidth: 0.5, borderColor: colors.plumbobBorder,
   },
   mockBtnDisabled: { opacity: 0.5 },
   mockBtnIcon: { fontSize: 12 },
@@ -567,13 +566,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 13,
     borderRadius: 16,
-    backgroundColor: colors.bgCard,
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.20)',
   },
   chipSelected: {
-    borderColor: colors.plumbob,
-    backgroundColor: colors.plumbobGlow,
+    borderColor: 'rgba(127,119,221,0.70)',
+    backgroundColor: 'rgba(127,119,221,0.20)',
   },
   chipSurprise: {
     borderStyle: 'dashed',
@@ -602,8 +601,8 @@ const styles = StyleSheet.create({
   },
   chipIcon: { fontSize: 22, width: 28, textAlign: 'center' },
   chipTextCol: { flex: 1 },
-  chipText: { fontSize: 15, color: colors.textSecondary, fontWeight: '600' },
-  chipTextSelected: { color: colors.plumbob, fontWeight: '700' },
+  chipText: { fontSize: 15, color: 'rgba(255,255,255,0.55)', fontWeight: '600' },
+  chipTextSelected: { color: '#AFA9EC', fontWeight: '700' },
   chipDesc: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
   chipCheck: { fontSize: 14, color: colors.plumbob, fontWeight: '800' },
 
@@ -611,15 +610,15 @@ const styles = StyleSheet.create({
   lengthGrid: { gap: 10 },
   lengthCard: {
     borderRadius: 18,
-    backgroundColor: colors.bgCard,
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.20)',
     padding: 18,
     position: 'relative',
   },
   lengthCardSelected: {
-    borderColor: colors.plumbob,
-    backgroundColor: colors.plumbobGlow,
+    borderColor: 'rgba(127,119,221,0.70)',
+    backgroundColor: 'rgba(127,119,221,0.20)',
   },
   lengthCardDisabled: { opacity: 0.32 },
   lengthTop: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
@@ -642,10 +641,11 @@ const styles = StyleSheet.create({
 
   footer: { paddingHorizontal: 20, paddingBottom: 44, paddingTop: 10 },
   nextButton: {
-    backgroundColor: colors.plumbob,
-    borderRadius: 18,
+    backgroundColor: 'rgba(127,119,221,0.80)',
+    borderRadius: 999,
     paddingVertical: 16,
     alignItems: 'center',
+    borderWidth: 0.5, borderColor: 'rgba(127,119,221,0.90)',
     shadowColor: colors.plumbob,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
@@ -654,13 +654,13 @@ const styles = StyleSheet.create({
   },
   nextBtnInner: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   nextButtonDisabled: {
-    backgroundColor: colors.bgCard,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.18)',
     shadowOpacity: 0,
     elevation: 0,
   },
-  nextButtonText:         { color: colors.bg, fontSize: 17, fontWeight: '800', letterSpacing: 0.3 },
-  nextButtonTextDisabled: { color: colors.textMuted, fontSize: 15, fontWeight: '600' },
-  nextArrow: { color: colors.bg, fontSize: 18, fontWeight: '700' },
+  nextButtonText:         { color: '#ffffff', fontSize: 17, fontWeight: '700', letterSpacing: 0.3 },
+  nextButtonTextDisabled: { color: 'rgba(255,255,255,0.35)', fontSize: 15, fontWeight: '600' },
+  nextArrow: { color: '#ffffff', fontSize: 18, fontWeight: '700' },
 });

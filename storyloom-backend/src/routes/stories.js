@@ -18,6 +18,7 @@ const {
   invalidateFromScene,
   updateChoiceBias,
 } = require('../services/PregenerationService');
+const { deductCredits, refundCredits } = require('../services/CreditService');
 
 const router = Router();
 
@@ -241,6 +242,7 @@ router.post('/:id/scenes', requireAuth, async (req, res, next) => {
     }
   }, SCENE_TIMEOUT_MS);
 
+  let freeformCreditDeducted = false;
   try {
     const { player_choice, player_text_input, choice_index } = req.body;
 
@@ -287,6 +289,12 @@ router.post('/:id/scenes', requireAuth, async (req, res, next) => {
 
     const sceneNumber = sceneNumberTarget;
     const sceneId     = uuidv4();
+
+    // ── Freeform credit deduction ─────────────────────────────
+    if (isFreeform) {
+      await deductCredits(userId, 10, 'Freeform action', storyId);
+      freeformCreditDeducted = true;
+    }
 
     // ── Step 2: Try warm bundle (first scene) or pregen bundle (subsequent) ─
     let sceneData, imageUrlFromBundle = null, usedCache = false;
@@ -428,7 +436,7 @@ router.post('/:id/scenes', requireAuth, async (req, res, next) => {
         storyId,
         story: { ...story, current_scene_number: sceneNumber, freeform_cooldown_remaining: nextCooldown },
         characters,
-        currentSceneRow: sceneRow,
+        currentSceneRow: { ...sceneRow, image_url: imageUrlFromBundle || previousScene?.image_url || null },
         currentSceneData: sceneData,
         recentScenes: (recentScenes ?? []).reverse(),
         isAppForeground,
@@ -450,6 +458,12 @@ router.post('/:id/scenes', requireAuth, async (req, res, next) => {
   } catch (err) {
     clearTimeout(timeoutId);
     if (res.headersSent) return;
+    if (err.statusCode === 402 || err.code === 'INSUFFICIENT_CREDITS') {
+      return res.status(402).json({ error: err.message, code: 'INSUFFICIENT_CREDITS' });
+    }
+    if (freeformCreditDeducted) {
+      refundCredits(userId, 10, 'Freeform refund — scene generation failed', storyId).catch(() => {});
+    }
     const msg = err.message ?? '';
     if (msg.includes('credit balance') || msg.includes('billing') || msg.includes('quota')) {
       return res.status(503).json({ error: 'The story AI is temporarily unavailable. Please try again.' });

@@ -420,7 +420,6 @@ async function pregeneratePair({
 // ── Cleanup (orphaned rows + old blobs) ───────────────────────
 async function runCleanup() {
   try {
-    const { error } = await supabaseAdmin.rpc('exec', { sql: '' }).catch(() => ({ error: null }));
     // Best-effort: delete old rows
     await supabaseAdmin
       .from('pregen_bundles')
